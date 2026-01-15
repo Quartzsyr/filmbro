@@ -1,3 +1,4 @@
+
 export enum View {
   SPLASH = 'SPLASH',
   DASHBOARD = 'DASHBOARD',
@@ -7,7 +8,8 @@ export enum View {
   ROLL_DETAIL = 'ROLL_DETAIL',
   STATS = 'STATS',
   CONTACT_SHEET = 'CONTACT_SHEET',
-  DEVELOP_TIMER = 'DEVELOP_TIMER'
+  DEVELOP_TIMER = 'DEVELOP_TIMER',
+  LIGHT_METER = 'LIGHT_METER'
 }
 
 export enum RollStatus {

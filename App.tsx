@@ -7,6 +7,7 @@ import { ContactSheet } from './components/ContactSheet';
 import { DevelopmentTimer } from './components/DevelopmentTimer';
 import { ProfileEditor } from './components/ProfileEditor';
 import { ExportSettings } from './components/ExportSettings';
+import { LightMeter } from './components/LightMeter';
 import { IdentificationResult, analyzePhoto } from './services/geminiService';
 
 // Mock Initial Data
@@ -68,6 +69,15 @@ const INITIAL_PROFILE: UserProfile = {
     website: 'julian.darkroom.com'
 };
 
+// --- Filters Definition ---
+const FILTERS = [
+    { id: 'normal', name: '原片', style: {} },
+    { id: 'bw-contrast', name: '黑白高反差', style: { filter: 'grayscale(100%) contrast(120%) brightness(95%)' } },
+    { id: 'vintage-warm', name: '复古暖调', style: { filter: 'sepia(30%) saturate(140%) contrast(90%) hue-rotate(-10deg)' } },
+    { id: 'cinematic', name: '电影感', style: { filter: 'contrast(110%) saturate(80%) brightness(90%) hue-rotate(185deg) sepia(20%)' } }, // Makeshift teal/orange
+    { id: 'faded', name: '过期胶卷', style: { filter: 'brightness(110%) contrast(80%) sepia(30%) hue-rotate(50deg) saturate(70%)' } },
+];
+
 // --- Lightbox Component ---
 const Lightbox = ({ photo, onClose, onAnalyze }: { 
     photo: FilmPhoto, 
@@ -75,19 +85,22 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
     onAnalyze: (photoId: string, url: string) => void
 }) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [activeFilterId, setActiveFilterId] = useState('normal');
 
     useEffect(() => {
         if (photo.analysis) setIsPanelOpen(true);
     }, [photo]);
 
+    const activeFilter = FILTERS.find(f => f.id === activeFilterId) || FILTERS[0];
+
     return (
         <div className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-xl flex flex-col md:flex-row animate-fade-in">
             {/* Toolbar */}
-            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent">
-                <button onClick={onClose} className="text-white/80 hover:text-white bg-black/40 p-2 rounded-full backdrop-blur">
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+                <button onClick={onClose} className="text-white/80 hover:text-white bg-black/40 p-2 rounded-full backdrop-blur pointer-events-auto">
                     <span className="material-symbols-outlined">close</span>
                 </button>
-                <div className="flex gap-4">
+                <div className="flex gap-4 pointer-events-auto">
                      <button 
                         onClick={() => {
                             if (!photo.analysis) onAnalyze(photo.id, photo.url);
@@ -107,19 +120,43 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
                 </div>
             </div>
 
-            {/* Main Image */}
-            <div className="flex-1 flex items-center justify-center p-4 md:p-12 overflow-hidden h-full">
-                <img 
-                    src={photo.url} 
-                    className="max-w-full max-h-full object-contain shadow-2xl rounded-sm" 
-                    style={{boxShadow: '0 0 50px rgba(0,0,0,0.8)'}}
-                />
+            {/* Main Image Area */}
+            <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden h-full">
+                <div className="relative flex-1 w-full flex items-center justify-center p-4 md:p-12">
+                    <img 
+                        src={photo.url} 
+                        className="max-w-full max-h-full object-contain shadow-2xl rounded-sm transition-all duration-300 ease-out" 
+                        style={{
+                            boxShadow: '0 0 50px rgba(0,0,0,0.8)',
+                            ...activeFilter.style
+                        }}
+                    />
+                </div>
+
+                {/* Filter Selector (Floating Bottom) */}
+                <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 max-w-[90%] z-20 transition-transform duration-300 ${isPanelOpen ? 'translate-y-32 opacity-0 pointer-events-none' : 'translate-y-0'}`}>
+                    <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-full p-1.5 flex gap-1 overflow-x-auto no-scrollbar shadow-2xl">
+                        {FILTERS.map(filter => (
+                            <button
+                                key={filter.id}
+                                onClick={() => setActiveFilterId(filter.id)}
+                                className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap transition-all ${
+                                    activeFilterId === filter.id 
+                                    ? 'bg-white text-black' 
+                                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                                }`}
+                            >
+                                {filter.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Analysis Panel */}
             <div className={`
                 fixed inset-x-0 bottom-0 md:static md:w-96 bg-[#111] border-t md:border-t-0 md:border-l border-white/10 
-                transform transition-transform duration-300 ease-out z-10 flex flex-col
+                transform transition-transform duration-300 ease-out z-30 flex flex-col
                 ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}
             `}>
                 <div className="p-6 h-full overflow-y-auto">
@@ -128,8 +165,12 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
                              <span className="material-symbols-outlined text-primary">analytics</span>
                              验片报告
                         </h3>
+                         {/* Close Panel Button for Mobile */}
+                         <button onClick={() => setIsPanelOpen(false)} className="md:hidden text-muted p-1">
+                             <span className="material-symbols-outlined">expand_more</span>
+                         </button>
                         {photo.analysis && (
-                             <div className="px-2 py-1 bg-white/10 rounded text-sm font-mono font-bold text-primary-hover">
+                             <div className="px-2 py-1 bg-white/10 rounded text-sm font-mono font-bold text-primary-hover hidden md:block">
                                 {photo.analysis.rating}/10
                              </div>
                         )}
@@ -198,8 +239,16 @@ export default function App() {
   const [isExifModalOpen, setIsExifModalOpen] = useState(false);
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
   const [isExportSettingsOpen, setIsExportSettingsOpen] = useState(false);
+  const [isAddRollModalOpen, setIsAddRollModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  
+  // New Roll Form State
+  const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400' });
+  const [addMethod, setAddMethod] = useState<'SELECT' | 'MANUAL'>('SELECT');
+
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [libraryFilter, setLibraryFilter] = useState<'ALL' | RollStatus>('ALL');
 
   // Splash Screen Timer
   useEffect(() => {
@@ -229,6 +278,43 @@ export default function App() {
     setRolls([newRoll, ...rolls]);
     setActiveRollId(newRoll.id);
     setCurrentView(View.ROLL_DETAIL);
+  };
+
+  const handleManualAddRoll = () => {
+      if(!newRollData.brand || !newRollData.name) {
+          alert('请填写品牌和名称');
+          return;
+      }
+
+      const newRoll: Roll = {
+        id: Date.now().toString(),
+        brand: newRollData.brand,
+        name: newRollData.name,
+        iso: parseInt(newRollData.iso) || 400,
+        camera: 'Unknown',
+        date: new Date().toISOString().split('T')[0],
+        status: RollStatus.ACTIVE,
+        coverImage: 'https://images.unsplash.com/photo-1596707323214-41d34c118679?q=80&w=2940&auto=format&fit=crop', // Generic placeholder
+        photos: [],
+        framesTaken: 0,
+        totalFrames: 36
+      };
+
+      setRolls([newRoll, ...rolls]);
+      setActiveRollId(newRoll.id);
+      setIsAddRollModalOpen(false);
+      setAddMethod('SELECT');
+      setNewRollData({ brand: '', name: '', iso: '400' });
+      setCurrentView(View.ROLL_DETAIL);
+  };
+
+  const confirmDeleteRoll = () => {
+      if (activeRollId) {
+          setRolls(prevRolls => prevRolls.filter(r => r.id !== activeRollId));
+          setActiveRollId(null);
+          setIsDeleteConfirmOpen(false);
+          setCurrentView(View.LIBRARY);
+      }
   };
 
   const handleRollClick = (id: string) => {
@@ -303,7 +389,131 @@ export default function App() {
     })));
   };
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 5) return "夜深了";
+    if (hour < 11) return "早上好";
+    if (hour < 13) return "中午好";
+    if (hour < 18) return "下午好";
+    return "晚上好";
+  };
+
   // --- Views ---
+
+  const renderAddRollModal = () => (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsAddRollModalOpen(false)}></div>
+        
+        <div className="relative w-full max-w-sm bg-[#111] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-fade-in">
+             <div className="px-6 py-4 border-b border-white/10 bg-surface-highlight flex justify-between items-center">
+                <h2 className="text-white font-bold text-lg">新建胶卷</h2>
+                <button onClick={() => setIsAddRollModalOpen(false)} className="text-muted hover:text-white">
+                    <span className="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div className="p-6">
+                {addMethod === 'SELECT' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                        <button 
+                            onClick={() => {
+                                setIsAddRollModalOpen(false);
+                                setCurrentView(View.SCANNER);
+                            }}
+                            className="aspect-square bg-surface-highlight border border-white/10 rounded-lg flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-primary/50 transition-all group"
+                        >
+                            <span className="material-symbols-outlined text-4xl text-primary group-hover:scale-110 transition-transform">qr_code_scanner</span>
+                            <span className="text-sm font-bold text-white">AI 扫描识别</span>
+                        </button>
+                         <button 
+                            onClick={() => setAddMethod('MANUAL')}
+                            className="aspect-square bg-surface-highlight border border-white/10 rounded-lg flex flex-col items-center justify-center gap-3 hover:bg-white/5 hover:border-white/50 transition-all group"
+                        >
+                            <span className="material-symbols-outlined text-4xl text-muted group-hover:text-white transition-colors">edit_square</span>
+                            <span className="text-sm font-bold text-white">手动输入</span>
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[10px] uppercase tracking-widest text-muted mb-1.5">胶卷品牌</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                                placeholder="Kodak, Fujifilm..."
+                                value={newRollData.brand}
+                                onChange={(e) => setNewRollData({...newRollData, brand: e.target.value})}
+                            />
+                        </div>
+                         <div>
+                            <label className="block text-[10px] uppercase tracking-widest text-muted mb-1.5">胶卷名称</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                                placeholder="Gold 200, HP5..."
+                                value={newRollData.name}
+                                onChange={(e) => setNewRollData({...newRollData, name: e.target.value})}
+                            />
+                        </div>
+                         <div>
+                            <label className="block text-[10px] uppercase tracking-widest text-muted mb-1.5">ISO 感光度</label>
+                            <select 
+                                className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-primary focus:outline-none appearance-none"
+                                value={newRollData.iso}
+                                onChange={(e) => setNewRollData({...newRollData, iso: e.target.value})}
+                            >
+                                {[50, 100, 160, 200, 400, 800, 1600, 3200].map(iso => (
+                                    <option key={iso} value={iso}>{iso}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <button 
+                            onClick={handleManualAddRoll}
+                            className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded mt-4"
+                        >
+                            创建胶卷
+                        </button>
+                        <button 
+                            onClick={() => setAddMethod('SELECT')}
+                            className="w-full py-2 text-xs text-muted hover:text-white"
+                        >
+                            返回
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+  );
+
+  const renderDeleteConfirmModal = () => (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsDeleteConfirmOpen(false)}></div>
+        <div className="relative w-full max-w-xs bg-[#111] border border-white/10 rounded-xl shadow-2xl p-6 animate-fade-in text-center">
+            <div className="size-12 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-2xl">warning</span>
+            </div>
+            <h3 className="text-white font-bold text-lg mb-2">删除胶卷?</h3>
+            <p className="text-sm text-muted mb-6">
+                确定要删除这个胶卷吗？<br/>此操作无法撤销，所有照片将丢失。
+            </p>
+            <div className="flex gap-3">
+                <button 
+                    onClick={() => setIsDeleteConfirmOpen(false)}
+                    className="flex-1 py-2.5 rounded-lg bg-white/5 text-white text-xs font-bold hover:bg-white/10 transition-colors"
+                >
+                    取消
+                </button>
+                <button 
+                    onClick={confirmDeleteRoll}
+                    className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-xs font-bold hover:bg-red-700 transition-colors"
+                >
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+  );
 
   const renderSplash = () => (
     <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden bg-background-dark">
@@ -337,10 +547,10 @@ export default function App() {
   );
 
   const renderDashboard = () => (
-    <div className="flex-1 px-4 pt-6 flex flex-col gap-8 overflow-y-auto pb-32 no-scrollbar">
+    <div className="flex-1 px-4 pt-6 flex flex-col gap-8 overflow-y-auto pb-40 no-scrollbar">
        <header className="flex justify-between items-center mb-2">
          <div>
-            <h2 className="text-3xl font-bold leading-tight text-white mb-1 font-display">晚上好, <span className="text-muted">{userProfile.name.split(' ')[0]}</span></h2>
+            <h2 className="text-3xl font-bold leading-tight text-white mb-1 font-display">{getGreeting()}, <span className="text-muted">{userProfile.name.split(' ')[0]}</span></h2>
             <p className="text-sm text-muted">准备好冲洗了吗?</p>
          </div>
          <div onClick={() => setCurrentView(View.PROFILE)} className="size-10 rounded-full bg-gray-800 border border-white/10 overflow-hidden cursor-pointer hover:border-primary transition-colors">
@@ -349,7 +559,7 @@ export default function App() {
        </header>
 
        {/* Active Roll Widget */}
-       {rolls.length > 0 && (
+       {rolls.length > 0 ? (
          <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between px-1">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-muted">当前胶卷</h3>
@@ -392,25 +602,59 @@ export default function App() {
                 </div>
             </div>
          </section>
+       ) : (
+        <section className="flex flex-col gap-3">
+            <div 
+                onClick={() => setIsAddRollModalOpen(true)}
+                className="relative bg-surface-highlight rounded-lg w-full p-8 flex flex-col items-center justify-center border border-white/10 border-dashed cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all gap-3 group"
+            >
+                <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                    <span className="material-symbols-outlined text-3xl text-primary">add_a_photo</span>
+                </div>
+                <div className="text-center">
+                    <h3 className="text-white font-bold">开始新胶卷</h3>
+                    <p className="text-xs text-muted mt-1">手动添加或 AI 识别</p>
+                </div>
+            </div>
+        </section>
        )}
 
        {/* Tools Section */}
        <section className="flex flex-col gap-3">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-muted px-1">暗房工具</h3>
-          <div 
-             onClick={() => setCurrentView(View.DEVELOP_TIMER)}
-             className="bg-surface-highlight border border-white/5 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors group"
-          >
-             <div className="flex items-center gap-4">
-                <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors">
+          <div className="flex items-center justify-between px-1">
+             <h3 className="text-xs font-bold uppercase tracking-widest text-muted">暗房工具</h3>
+             <button onClick={() => setIsAddRollModalOpen(true)} className="flex items-center gap-1 text-[10px] uppercase font-bold text-primary hover:text-white transition-colors">
+                 <span className="material-symbols-outlined text-sm">add</span>
+                 新建胶卷
+             </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+              <div 
+                 onClick={() => setCurrentView(View.DEVELOP_TIMER)}
+                 className="bg-surface-highlight border border-white/5 p-4 rounded-lg flex flex-col justify-between h-32 cursor-pointer hover:bg-white/5 transition-colors group"
+              >
+                 <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 group-hover:bg-red-500 group-hover:text-white transition-colors mb-2">
                     <span className="material-symbols-outlined">timer</span>
-                </div>
-                <div>
+                 </div>
+                 <div>
                     <h4 className="font-bold text-white">冲洗助手</h4>
-                    <p className="text-xs text-muted">Dev • Stop • Fix • Wash</p>
-                </div>
-             </div>
-             <span className="material-symbols-outlined text-muted">chevron_right</span>
+                    <p className="text-[10px] text-muted">Dev • Stop • Fix</p>
+                 </div>
+              </div>
+
+              <div 
+                 onClick={() => setCurrentView(View.LIGHT_METER)}
+                 className="bg-surface-highlight border border-white/5 p-4 rounded-lg flex flex-col justify-between h-32 cursor-pointer hover:bg-white/5 transition-colors group"
+              >
+                 <div className="size-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors mb-2">
+                    <span className="material-symbols-outlined">exposure</span>
+                 </div>
+                 <div>
+                    <h4 className="font-bold text-white">测光表</h4>
+                    <p className="text-[10px] text-muted">Zone System</p>
+                 </div>
+              </div>
           </div>
        </section>
 
@@ -422,7 +666,9 @@ export default function App() {
           >
              <span className="text-xs font-bold text-muted/60 uppercase tracking-widest border border-muted/30 px-2 py-0.5 w-fit rounded-sm">已冲洗</span>
              <div>
-                <span className="block text-2xl font-bold text-white">1,204</span>
+                <span className="block text-2xl font-bold text-white">
+                    {rolls.filter(r => r.status === RollStatus.ARCHIVED).length + rolls.filter(r => r.status === RollStatus.DEVELOPED).length}
+                </span>
                 <span className="text-xs text-muted">归档底片</span>
              </div>
           </div>
@@ -432,7 +678,9 @@ export default function App() {
           >
              <span className="text-xs font-bold text-primary/80 uppercase tracking-widest border border-primary/30 px-2 py-0.5 w-fit rounded-sm">待处理</span>
              <div>
-                <span className="block text-2xl font-bold text-white">3</span>
+                <span className="block text-2xl font-bold text-white">
+                    {rolls.filter(r => r.status === RollStatus.IN_LAB).length}
+                </span>
                 <span className="text-xs text-muted">排队中</span>
              </div>
           </div>
@@ -440,85 +688,74 @@ export default function App() {
     </div>
   );
 
-  const renderStats = () => (
-    <div className="flex-1 flex flex-col h-full bg-background-dark">
-        <header className="px-5 pt-8 pb-4 sticky top-0 bg-background-dark/95 backdrop-blur z-10 border-b border-white/5">
-            <h1 className="text-white text-3xl font-bold uppercase leading-none font-display">数据<br/>分析</h1>
-        </header>
-        <div className="flex-1 overflow-y-auto p-5 pb-32 no-scrollbar space-y-6">
-            
-            {/* Monthly Usage Chart (Mock) */}
-            <div className="bg-surface-highlight border border-white/5 p-5 rounded-lg">
-                <h3 className="text-sm font-bold text-muted uppercase tracking-widest mb-6">年度拍摄概览</h3>
-                <div className="flex items-end justify-between h-32 gap-2">
-                    {[30, 45, 25, 60, 80, 40, 20, 50, 70, 90, 55, 65].map((h, i) => (
-                        <div key={i} className="w-full bg-white/10 hover:bg-primary/80 transition-colors rounded-t-sm relative group" style={{height: `${h}%`}}>
-                             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-black text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity font-mono">
-                                {h}
-                             </div>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex justify-between mt-3 text-[10px] text-muted font-mono uppercase">
-                    <span>Jan</span>
-                    <span>Dec</span>
-                </div>
-            </div>
+  const renderLibrary = () => {
+    const visibleRolls = rolls.filter(roll => {
+        if (libraryFilter === 'ALL') return true;
+        return roll.status === libraryFilter;
+    });
 
-            {/* Top Brands */}
-            <div className="bg-surface-highlight border border-white/5 p-5 rounded-lg">
-                 <h3 className="text-sm font-bold text-muted uppercase tracking-widest mb-4">胶卷品牌偏好</h3>
-                 <div className="space-y-4">
-                    {[
-                        { name: 'Kodak', percent: 65, color: 'bg-[#ffc107]' },
-                        { name: 'Ilford', percent: 20, color: 'bg-white' },
-                        { name: 'Fujifilm', percent: 10, color: 'bg-[#4caf50]' },
-                        { name: 'Cinestill', percent: 5, color: 'bg-[#f44336]' },
-                    ].map((item) => (
-                        <div key={item.name} className="flex items-center gap-3">
-                            <span className="text-xs font-bold w-16 text-right">{item.name}</span>
-                            <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
-                                <div className={`h-full ${item.color}`} style={{width: `${item.percent}%`}}></div>
-                            </div>
-                            <span className="text-xs font-mono text-muted w-8">{item.percent}%</span>
-                        </div>
-                    ))}
-                 </div>
-            </div>
-
-            {/* ISO Distribution */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-surface-highlight border border-white/5 p-4 rounded-lg flex flex-col items-center justify-center py-6">
-                     <div className="size-20 rounded-full border-4 border-primary/20 flex items-center justify-center relative">
-                        <span className="text-xl font-bold font-mono">400</span>
-                        <span className="absolute -bottom-6 text-[10px] text-muted uppercase">最常用 ISO</span>
-                     </div>
-                </div>
-                 <div className="bg-surface-highlight border border-white/5 p-4 rounded-lg flex flex-col items-center justify-center py-6">
-                     <div className="size-20 rounded-full border-4 border-white/10 flex items-center justify-center relative">
-                        <span className="text-xl font-bold font-mono">35mm</span>
-                        <span className="absolute -bottom-6 text-[10px] text-muted uppercase">主要画幅</span>
-                     </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-  );
-
-  const renderLibrary = () => (
+    return (
     <div className="flex-1 flex flex-col h-full">
-        <header className="px-5 pt-8 pb-4 sticky top-0 bg-background-dark/95 backdrop-blur z-10 border-b border-white/5">
-            <h1 className="text-white text-3xl font-bold uppercase leading-none mb-4 font-display">胶片<br/>档案</h1>
+        <header className="px-5 pt-8 pb-4 sticky top-0 bg-background-dark/95 backdrop-blur z-10 border-b border-white/5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+                <h1 className="text-white text-3xl font-bold uppercase leading-none font-display">胶片<br/>档案</h1>
+                <button 
+                    onClick={() => {
+                        setAddMethod('SELECT');
+                        setIsAddRollModalOpen(true);
+                    }}
+                    className="size-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary-hover transition-colors"
+                >
+                    <span className="material-symbols-outlined">add</span>
+                </button>
+            </div>
+            
             <div className="flex gap-3 overflow-x-auto no-scrollbar">
-                <button className="shrink-0 px-4 py-1.5 rounded-full bg-primary text-white text-xs font-bold uppercase border border-primary">全部</button>
-                <button className="shrink-0 px-4 py-1.5 rounded-full text-gray-400 border border-white/20 text-xs font-bold uppercase">已冲洗</button>
-                <button className="shrink-0 px-4 py-1.5 rounded-full text-gray-400 border border-white/20 text-xs font-bold uppercase">冲扫中</button>
+                <button 
+                    onClick={() => setLibraryFilter('ALL')}
+                    className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold uppercase border transition-colors ${
+                        libraryFilter === 'ALL' 
+                        ? 'bg-primary text-white border-primary' 
+                        : 'text-gray-400 border-white/20 hover:border-white/50'
+                    }`}
+                >
+                    全部
+                </button>
+                <button 
+                    onClick={() => setLibraryFilter(RollStatus.DEVELOPED)}
+                    className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold uppercase border transition-colors ${
+                        libraryFilter === RollStatus.DEVELOPED
+                        ? 'bg-primary text-white border-primary' 
+                        : 'text-gray-400 border-white/20 hover:border-white/50'
+                    }`}
+                >
+                    已冲洗
+                </button>
+                <button 
+                    onClick={() => setLibraryFilter(RollStatus.IN_LAB)}
+                    className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold uppercase border transition-colors ${
+                        libraryFilter === RollStatus.IN_LAB
+                        ? 'bg-primary text-white border-primary' 
+                        : 'text-gray-400 border-white/20 hover:border-white/50'
+                    }`}
+                >
+                    冲扫中
+                </button>
+                 <button 
+                    onClick={() => setLibraryFilter(RollStatus.ARCHIVED)}
+                    className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-bold uppercase border transition-colors ${
+                        libraryFilter === RollStatus.ARCHIVED
+                        ? 'bg-primary text-white border-primary' 
+                        : 'text-gray-400 border-white/20 hover:border-white/50'
+                    }`}
+                >
+                    已归档
+                </button>
             </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-5 pb-32 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 pb-40 no-scrollbar">
             <div className="grid grid-cols-2 gap-4">
-                {rolls.map(roll => (
+                {visibleRolls.map(roll => (
                     <div key={roll.id} onClick={() => handleRollClick(roll.id)} className="group flex flex-col gap-3 cursor-pointer">
                         <div className="relative aspect-[4/5] w-full rounded-sm overflow-hidden bg-stone-800 border border-white/10 group-hover:border-primary/50 transition-all">
                             <img src={roll.coverImage} className="w-full h-full object-cover" />
@@ -538,10 +775,17 @@ export default function App() {
                         </div>
                     </div>
                 ))}
+                {visibleRolls.length === 0 && (
+                    <div className="col-span-2 py-12 text-center opacity-50">
+                        <span className="material-symbols-outlined text-4xl mb-2">filter_none</span>
+                        <p className="text-sm">没有找到相关胶卷</p>
+                    </div>
+                )}
             </div>
         </div>
     </div>
   );
+  }
 
   const renderRollDetail = () => {
     const roll = rolls.find(r => r.id === activeRollId);
@@ -559,7 +803,7 @@ export default function App() {
                 <span className="w-6"></span>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 pb-32">
+            <div className="flex-1 overflow-y-auto p-6 pb-40">
                  <div className="flex items-start gap-6 mb-8">
                     <div className="w-24 h-32 rounded bg-gray-800 overflow-hidden shrink-0 border border-white/20">
                         <img src={roll.coverImage} className="w-full h-full object-cover" />
@@ -625,7 +869,7 @@ export default function App() {
                  </div>
 
                  {/* Photos Grid */}
-                 <div className="grid grid-cols-3 gap-1">
+                 <div className="grid grid-cols-3 gap-1 mb-12">
                     {roll.photos.map((photo, index) => (
                         <div 
                             key={photo.id} 
@@ -655,6 +899,17 @@ export default function App() {
                         </div>
                     ))}
                  </div>
+                 
+                 {/* Delete Zone */}
+                 <div className="border-t border-white/10 pt-8 flex justify-center pb-8">
+                     <button 
+                        onClick={() => setIsDeleteConfirmOpen(true)}
+                        className="flex items-center gap-2 px-6 py-3 rounded-full border border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white transition-all group"
+                     >
+                         <span className="material-symbols-outlined group-hover:scale-110 transition-transform">delete</span>
+                         <span className="text-xs font-bold uppercase tracking-widest">删除胶卷</span>
+                     </button>
+                 </div>
             </div>
             
             {/* Modal */}
@@ -678,76 +933,219 @@ export default function App() {
     );
   };
 
-  const renderProfile = () => (
-      <div className="flex-1 flex flex-col items-center pt-12 px-6 overflow-y-auto pb-32 no-scrollbar">
-        <div 
-            onClick={() => setIsProfileEditorOpen(true)}
-            className="relative group cursor-pointer mb-6"
-        >
-            <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/50 shadow-lg shadow-primary/10">
-                <img src={userProfile.avatar} className="w-full h-full object-cover grayscale" />
-            </div>
-            <div className="absolute bottom-0 right-0 bg-primary text-white p-1.5 rounded-full border-2 border-background-dark group-hover:scale-110 transition-transform">
-                <span className="material-symbols-outlined text-[16px]">edit</span>
-            </div>
-        </div>
-        <h2 className="text-xl font-bold tracking-tight mb-1 text-center">{userProfile.name}</h2>
-        <p className="text-xs font-medium text-primary/80 uppercase tracking-widest mb-6 text-center">{userProfile.role}</p>
-        
-        {userProfile.bio && (
-             <p className="text-sm text-muted text-center max-w-xs mb-8 leading-relaxed font-light">
-                {userProfile.bio}
-             </p>
-        )}
+  const renderProfile = () => {
+    // Basic stats calculation
+    const totalRolls = rolls.length;
+    const totalPhotos = rolls.reduce((acc, roll) => acc + roll.photos.length, 0);
 
-        <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-8">
-            {userProfile.favoriteCamera && (
-                <div className="bg-surface-highlight border border-white/5 p-3 rounded flex flex-col items-center">
-                    <span className="text-[10px] uppercase tracking-widest text-muted mb-1">Favorite Camera</span>
-                    <span className="text-sm font-bold">{userProfile.favoriteCamera}</span>
+    return (
+      <div className="flex-1 w-full h-full overflow-y-auto no-scrollbar bg-background-dark">
+        <div className="flex flex-col items-center pt-12 px-6 pb-40">
+            <div 
+                onClick={() => setIsProfileEditorOpen(true)}
+                className="relative group cursor-pointer mb-6"
+            >
+                <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-primary/50 shadow-lg shadow-primary/10">
+                    <img src={userProfile.avatar} className="w-full h-full object-cover grayscale" />
                 </div>
+                <div className="absolute bottom-0 right-0 bg-primary text-white p-1.5 rounded-full border-2 border-background-dark group-hover:scale-110 transition-transform">
+                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                </div>
+            </div>
+            <h2 className="text-xl font-bold tracking-tight mb-1 text-center">{userProfile.name}</h2>
+            <p className="text-xs font-medium text-primary/80 uppercase tracking-widest mb-6 text-center">{userProfile.role}</p>
+            
+            {userProfile.bio && (
+                <p className="text-sm text-muted text-center max-w-xs mb-8 leading-relaxed font-light">
+                    {userProfile.bio}
+                </p>
             )}
-             {userProfile.favoriteFilm && (
-                <div className="bg-surface-highlight border border-white/5 p-3 rounded flex flex-col items-center">
-                    <span className="text-[10px] uppercase tracking-widest text-muted mb-1">Favorite Film</span>
-                    <span className="text-sm font-bold">{userProfile.favoriteFilm}</span>
+
+            {/* Profile Stats Widget */}
+            <div className="flex items-center gap-6 mb-8 w-full max-w-xs justify-center">
+                <div className="text-center">
+                    <div className="text-xl font-bold font-mono text-white">{totalRolls}</div>
+                    <div className="text-[10px] text-muted uppercase tracking-wider">胶卷</div>
                 </div>
-            )}
-        </div>
-        
-        <div className="w-full max-w-sm bg-surface-highlight border border-white/5 rounded-lg overflow-hidden divide-y divide-white/5">
-            <button className="w-full flex items-center justify-between p-4 hover:bg-white/5">
-                <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-gray-400">cloud_sync</span>
-                    <span className="text-sm font-medium">云同步</span>
+                <div className="w-px h-8 bg-white/10"></div>
+                <div className="text-center">
+                    <div className="text-xl font-bold font-mono text-white">{totalPhotos}</div>
+                    <div className="text-[10px] text-muted uppercase tracking-wider">照片</div>
                 </div>
-                <span className="text-xs text-green-500">已同步</span>
-            </button>
-             <button 
-                onClick={() => setIsExportSettingsOpen(true)}
-                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-             >
-                <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-gray-400">tune</span>
-                    <span className="text-sm font-medium">导出设置</span>
-                </div>
-                <span className="material-symbols-outlined text-gray-600 text-sm">chevron_right</span>
-            </button>
-            {userProfile.website && (
-                <a href={`https://${userProfile.website}`} target="_blank" className="w-full flex items-center justify-between p-4 hover:bg-white/5">
-                    <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-gray-400">public</span>
-                        <span className="text-sm font-medium">个人主页</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 w-full max-w-sm mb-8">
+                {userProfile.favoriteCamera && (
+                    <div className="bg-surface-highlight border border-white/5 p-3 rounded flex flex-col items-center text-center">
+                        <span className="text-[10px] uppercase tracking-widest text-muted mb-1">常用相机</span>
+                        <span className="text-sm font-bold">{userProfile.favoriteCamera}</span>
                     </div>
-                    <span className="material-symbols-outlined text-gray-600 text-sm">open_in_new</span>
-                </a>
-            )}
+                )}
+                {userProfile.favoriteFilm && (
+                    <div className="bg-surface-highlight border border-white/5 p-3 rounded flex flex-col items-center text-center">
+                        <span className="text-[10px] uppercase tracking-widest text-muted mb-1">常用胶卷</span>
+                        <span className="text-sm font-bold">{userProfile.favoriteFilm}</span>
+                    </div>
+                )}
+            </div>
+            
+            <div className="w-full max-w-sm bg-surface-highlight border border-white/5 rounded-lg overflow-hidden divide-y divide-white/5">
+                <button 
+                    onClick={() => alert("云同步已是最新状态。")} 
+                    className="w-full flex items-center justify-between p-4 hover:bg-white/5 active:bg-white/10"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-gray-400">cloud_sync</span>
+                        <span className="text-sm font-medium">云同步</span>
+                    </div>
+                    <span className="text-xs text-green-500 font-bold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs">check</span>
+                        已同步
+                    </span>
+                </button>
+                <button 
+                    onClick={() => setIsExportSettingsOpen(true)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-gray-400">tune</span>
+                        <span className="text-sm font-medium">导出设置</span>
+                    </div>
+                    <span className="material-symbols-outlined text-gray-600 text-sm">chevron_right</span>
+                </button>
+                {userProfile.website && (
+                    <a href={`https://${userProfile.website}`} target="_blank" className="w-full flex items-center justify-between p-4 hover:bg-white/5">
+                        <div className="flex items-center gap-3">
+                            <span className="material-symbols-outlined text-gray-400">public</span>
+                            <span className="text-sm font-medium">个人主页</span>
+                        </div>
+                        <span className="material-symbols-outlined text-gray-600 text-sm">open_in_new</span>
+                    </a>
+                )}
+            </div>
+            
+            {/* Explicit Spacer for Safe Area */}
+            <div className="h-12 w-full shrink-0"></div>
         </div>
       </div>
-  );
+    );
+  };
+
+  const renderStats = () => {
+    // Basic stats calculation
+    const totalRolls = rolls.length;
+    const totalPhotos = rolls.reduce((acc, roll) => acc + roll.photos.length, 0);
+    const developedRolls = rolls.filter(r => r.status === RollStatus.DEVELOPED || r.status === RollStatus.ARCHIVED).length;
+    
+    // Most popular camera
+    const cameraCounts: Record<string, number> = {};
+    rolls.forEach(r => {
+        if (r.camera && r.camera !== 'Unknown') {
+            cameraCounts[r.camera] = (cameraCounts[r.camera] || 0) + 1;
+        }
+    });
+    const popularCamera = Object.entries(cameraCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
+
+    // Most popular film
+    const filmCounts: Record<string, number> = {};
+    rolls.forEach(r => {
+        const name = `${r.brand} ${r.name}`;
+        filmCounts[name] = (filmCounts[name] || 0) + 1;
+    });
+    const popularFilm = Object.entries(filmCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown';
+
+    return (
+        <div className="flex-1 flex flex-col bg-background-dark h-full overflow-y-auto no-scrollbar pb-24">
+             <header className="px-6 pt-12 pb-6">
+                <h1 className="text-white text-3xl font-bold uppercase leading-none font-display mb-2">数据<br/>统计</h1>
+                <p className="text-xs text-muted uppercase tracking-widest">Your Analog Journey</p>
+             </header>
+
+             <div className="px-6 space-y-6">
+                {/* Big Numbers */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-surface-highlight border border-white/5 p-5 rounded-lg">
+                        <div className="text-3xl font-bold text-white font-mono">{totalRolls}</div>
+                        <div className="text-[10px] text-muted uppercase tracking-wider mt-1">Total Rolls</div>
+                    </div>
+                     <div className="bg-surface-highlight border border-white/5 p-5 rounded-lg">
+                        <div className="text-3xl font-bold text-white font-mono">{totalPhotos}</div>
+                        <div className="text-[10px] text-muted uppercase tracking-wider mt-1">Total Photos</div>
+                    </div>
+                </div>
+                
+                <div className="bg-surface-highlight border border-white/5 p-5 rounded-lg flex items-center justify-between">
+                     <div>
+                        <div className="text-2xl font-bold text-primary font-mono">{developedRolls}</div>
+                        <div className="text-[10px] text-muted uppercase tracking-wider mt-1">Developed & Archived</div>
+                    </div>
+                    <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span className="material-symbols-outlined">inbox</span>
+                    </div>
+                </div>
+
+                {/* Favorites */}
+                <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">最爱器材</h3>
+                    <div className="space-y-3">
+                         <div className="flex items-center justify-between p-4 bg-[#111] border border-white/5 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-gray-500">camera_alt</span>
+                                <div>
+                                    <div className="text-sm font-bold text-white">{popularCamera}</div>
+                                    <div className="text-[10px] text-muted">Most Used Camera</div>
+                                </div>
+                            </div>
+                         </div>
+                         <div className="flex items-center justify-between p-4 bg-[#111] border border-white/5 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <span className="material-symbols-outlined text-gray-500">film</span>
+                                <div>
+                                    <div className="text-sm font-bold text-white">{popularFilm}</div>
+                                    <div className="text-[10px] text-muted">Most Used Film Stock</div>
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+                </div>
+                
+                {/* Status Distribution Visualizer */}
+                <div>
+                     <h3 className="text-xs font-bold uppercase tracking-widest text-muted mb-3">状态分布</h3>
+                     <div className="flex h-4 rounded-full overflow-hidden w-full bg-white/5 mb-3">
+                        {Object.values(RollStatus).map((status, idx) => {
+                            const count = rolls.filter(r => r.status === status).length;
+                            if (count === 0) return null;
+                            const percentage = (count / totalRolls) * 100;
+                            const colors = ['bg-primary', 'bg-blue-600', 'bg-yellow-600', 'bg-green-600'];
+                            
+                            return (
+                                <div key={status} style={{ width: `${percentage}%` }} className={`${colors[idx % colors.length]} h-full border-r border-black/20`} />
+                            );
+                        })}
+                     </div>
+                     <div className="grid grid-cols-2 gap-2">
+                        {Object.values(RollStatus).map((status, idx) => {
+                             const count = rolls.filter(r => r.status === status).length;
+                             // if (count === 0) return null; // Show all for legend consistency? No, hide empty usually better or show 0
+                             const colors = ['bg-primary', 'bg-blue-600', 'bg-yellow-600', 'bg-green-600'];
+                             return (
+                                 <div key={status} className="flex items-center gap-2">
+                                     <div className={`size-2 rounded-full ${colors[idx % colors.length]}`}></div>
+                                     <span className="text-[10px] text-muted uppercase flex-1">{status}</span>
+                                     <span className="text-[10px] font-mono text-white">{count}</span>
+                                 </div>
+                             )
+                        })}
+                     </div>
+                </div>
+             </div>
+        </div>
+    );
+  };
 
   return (
-    <div className="relative w-full h-screen bg-background-dark text-white overflow-hidden flex flex-col font-body">
+    <div className="relative w-full h-[100dvh] bg-background-dark text-white overflow-hidden flex flex-col font-body">
       {/* View Router */}
       {currentView === View.SPLASH && renderSplash()}
       {currentView === View.DASHBOARD && renderDashboard()}
@@ -766,6 +1164,10 @@ export default function App() {
       
       {currentView === View.DEVELOP_TIMER && (
           <DevelopmentTimer onClose={() => setCurrentView(View.DASHBOARD)} />
+      )}
+
+      {currentView === View.LIGHT_METER && (
+          <LightMeter onClose={() => setCurrentView(View.DASHBOARD)} />
       )}
 
       {/* Overlay Scanner */}
@@ -790,11 +1192,18 @@ export default function App() {
           <ExportSettings onClose={() => setIsExportSettingsOpen(false)} />
       )}
 
+      {/* Add Roll Modal */}
+      {isAddRollModalOpen && renderAddRollModal()}
+      
+      {/* Delete Confirmation Modal */}
+      {isDeleteConfirmOpen && renderDeleteConfirmModal()}
+
       {/* Navigation (Hidden on Splash, Scanner, Contact Sheet, Timer) */}
       {currentView !== View.SPLASH && 
        currentView !== View.SCANNER && 
        currentView !== View.CONTACT_SHEET && 
-       currentView !== View.DEVELOP_TIMER && (
+       currentView !== View.DEVELOP_TIMER && 
+       currentView !== View.LIGHT_METER && (
         <Navigation currentView={currentView} onChangeView={setCurrentView} />
       )}
     </div>

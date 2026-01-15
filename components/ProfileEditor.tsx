@@ -15,8 +15,17 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ profile, onSave, o
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const imageUrl = URL.createObjectURL(file);
+      handleChange('avatar', imageUrl);
+    }
+  };
+
   const handleSave = () => {
     setIsSaving(true);
+    // Simulate network delay
     setTimeout(() => {
         onSave(formData);
         setIsSaving(false);
@@ -44,14 +53,23 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ profile, onSave, o
 
         <div className="p-6 overflow-y-auto space-y-5">
             <div className="flex justify-center mb-6">
-                <div className="relative group cursor-pointer">
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-primary transition-colors">
-                        <img src={formData.avatar} className="w-full h-full object-cover grayscale" />
+                <div 
+                    className="relative group cursor-pointer"
+                    onClick={() => document.getElementById('avatar-upload')?.click()}
+                >
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-white/10 group-hover:border-primary transition-colors bg-surface-highlight">
+                        <img src={formData.avatar} className="w-full h-full object-cover" />
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 rounded-full transition-opacity">
-                        <span className="material-symbols-outlined text-white">add_a_photo</span>
+                        <span className="material-symbols-outlined text-white text-3xl">add_a_photo</span>
                     </div>
-                    {/* Mock Avatar change functionality - In real app this would trigger file input */}
+                    <input 
+                        id="avatar-upload"
+                        type="file" 
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarChange}
+                    />
                 </div>
             </div>
 

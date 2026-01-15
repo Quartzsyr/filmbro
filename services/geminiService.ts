@@ -18,6 +18,20 @@ export interface PhotoAnalysisResult {
   rating: number;
 }
 
+export interface DevelopmentStep {
+  name: string;
+  duration: number; // seconds
+  color: string;
+  description: string;
+}
+
+export interface DevelopmentRecipe {
+  id: string;
+  name: string;
+  temp: string;
+  steps: DevelopmentStep[];
+}
+
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
   const fallbackData: IdentificationResult = {
     brand: "Kodak",
@@ -152,5 +166,90 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
   } catch (error) {
     console.error("Analysis Error:", error);
     return fallbackData;
+  }
+};
+
+export const getDevelopmentRecipe = async (userPrompt: string): Promise<DevelopmentRecipe | null> => {
+  try {
+     if (!process.env.API_KEY) {
+        console.warn("No API Key, returning default recipe mock.");
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        return {
+            id: 'ai-mock-' + Date.now(),
+            name: 'AI: ' + userPrompt,
+            temp: '20°C',
+            steps: [
+                { name: 'Developer (Mock)', duration: 300, color: 'text-green-500', description: 'Mock AI developer step' },
+                { name: 'Stop', duration: 60, color: 'text-yellow-500', description: 'Stop bath' },
+                { name: 'Fixer', duration: 300, color: 'text-purple-500', description: 'Fixer' },
+                { name: 'Wash', duration: 600, color: 'text-blue-500', description: 'Final wash' }
+            ]
+        };
+     }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `You are an expert film development lab technician. 
+      Generate a film development recipe based on this user request: "${userPrompt}".
+      
+      If the user specifies a push/pull process, adjust times accordingly.
+      If the developer is not specified, recommend a standard one like D-76 or ID-11 for B&W, or C-41 for color.
+      
+      Return a valid JSON object.
+      The 'color' field must be one of these Tailwind CSS classes based on the chemical step:
+      - Developer: 'text-green-500' (or red-500 for Color Dev)
+      - Stop Bath: 'text-yellow-500'
+      - Fixer / Blix: 'text-purple-500'
+      - Wash: 'text-blue-500'
+      - Stabilizer / Photo Flo: 'text-pink-500'
+      
+      Schema:
+      {
+        "id": "unique-id",
+        "name": "Short Descriptive Name (e.g. HP5+ @ 1600 in DD-X)",
+        "temp": "Temperature (e.g. 20°C or 38°C)",
+        "steps": [
+          {
+            "name": "Step Name",
+            "duration": 300, // in seconds
+            "color": "tailwind-text-class",
+            "description": "Short instruction (e.g. Agitate first 30s, then 5s every min)"
+          }
+        ]
+      }`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            name: { type: Type.STRING },
+            temp: { type: Type.STRING },
+            steps: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  duration: { type: Type.INTEGER },
+                  color: { type: Type.STRING },
+                  description: { type: Type.STRING }
+                },
+                required: ["name", "duration", "color", "description"]
+              }
+            }
+          },
+          required: ["id", "name", "temp", "steps"]
+        }
+      }
+    });
+    
+    const text = response.text;
+    if (!text) return null;
+    return JSON.parse(text) as DevelopmentRecipe;
+
+  } catch (error) {
+    console.error("Recipe generation failed:", error);
+    return null;
   }
 };
