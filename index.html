@@ -2,8 +2,14 @@
 <html lang="zh-CN" class="dark">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Film Archive AI</title>
+    
+    <!-- PWA Settings for iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,7 +81,10 @@
     "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
     "@google/genai": "https://esm.sh/@google/genai@^1.36.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite-plugin-pwa": "https://esm.sh/vite-plugin-pwa@^1.2.0"
   }
 }
 </script>
