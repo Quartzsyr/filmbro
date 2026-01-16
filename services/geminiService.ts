@@ -38,20 +38,23 @@ export interface DevelopmentRecipe {
 }
 
 /**
- * 获取 API Key：优先从本地存储读取，其次读取系统环境变量
+ * 动态获取 API Key。优先从 localStorage 读取。
  */
 const getActiveApiKey = () => {
   const localKey = localStorage.getItem('LOCAL_GEMINI_KEY');
   if (localKey && localKey.trim() !== "") {
     return localKey.trim();
   }
-  return process.env.API_KEY || "";
+  // 备选方案：环境变量
+  return (window as any).process?.env?.API_KEY || "";
 };
 
+/**
+ * 实例化 AI 客户端。
+ */
 const createAIClient = () => {
   const apiKey = getActiveApiKey();
   if (!apiKey) {
-    console.warn("API_KEY_MISSING: 请在个人资料页面设置您的 Gemini API Key");
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
@@ -62,10 +65,32 @@ const prepareImageData = (base64Image: string) => {
   return base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 };
 
+// 使用成熟的 Gemini 3 Flash 模型
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
-export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
+/**
+ * 包装请求，捕获具体错误
+ */
+async function safeGenerate(fn: () => Promise<any>) {
   try {
+    return await fn();
+  } catch (error: any) {
+    console.error("Gemini API Error details:", error);
+    // 提取更有用的错误信息
+    const msg = error.message || "未知错误";
+    if (msg.includes("API_KEY_INVALID") || msg.includes("403")) {
+      throw new Error("密钥无效或权限不足 (403)");
+    } else if (msg.includes("404")) {
+      throw new Error("模型未找到或暂不支持该区域 (404)");
+    } else if (msg.includes("fetch") || msg.includes("Network")) {
+      throw new Error("网络连接失败，请检查是否需要开启代理");
+    }
+    throw error;
+  }
+}
+
+export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
@@ -76,7 +101,7 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
         ]
       },
       config: {
-        systemInstruction: "你是一个专业的胶片摄影助手。识别图片中的胶卷品牌、名称、ISO和类型。请务必使用中文回答品牌和类型名称。返回 JSON。",
+        systemInstruction: "你是一个专业的胶片摄影助手。识别图片中的胶卷品牌、名称、ISO和类型。请务必使用中文回答。返回 JSON。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -91,14 +116,11 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    throw error;
-  }
+  });
 };
 
 export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisResult> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
@@ -124,14 +146,11 @@ export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisRes
       }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    throw error;
-  }
+  });
 };
 
 export const analyzeSceneForFilm = async (base64Data: string, stockNames: string[]): Promise<SceneAnalysisResult> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
@@ -142,7 +161,7 @@ export const analyzeSceneForFilm = async (base64Data: string, stockNames: string
         ]
       },
       config: {
-        systemInstruction: "你是一个专业的电影摄影师。用中文分析实时场景的光影特性、反差，并根据现有胶片库存推荐一款最合适的，给出具体的拍摄技巧。返回 JSON。",
+        systemInstruction: "你是一个专业的电影摄影师。用中文分析实时场景的光影特性、反差，并推荐一款最合适的胶片。返回 JSON。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -157,50 +176,43 @@ export const analyzeSceneForFilm = async (base64Data: string, stockNames: string
       }
     });
     return JSON.parse(response.text || "{}");
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    throw error;
-  }
+  });
 };
 
 export const getDailyInsight = async (): Promise<string> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: "为胶片摄影师写一句充满诗意的每日箴言。中文，20字以内。",
     });
     return response.text?.trim() || "光影是时间的琥珀。";
-  } catch (e) {
-    return "光影是时间的琥珀。";
-  }
+  });
 };
 
 export const recommendFilm = async (weather: string, stock: StockFilm[]): Promise<string> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const stockSummary = stock.map(s => `${s.brand} ${s.name}`).join(', ');
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: `天气：${weather}。库存：${stockSummary}。推荐一款今日用卷。`,
       config: {
-        systemInstruction: "你是一个资深胶片摄影专家。用简洁优美的中文从库存中推荐一款最合适的胶卷。总字数控制在50字以内。",
+        systemInstruction: "你是一个资深胶片摄影专家。从库存中推荐一款最合适的胶卷。总字数控制在50字以内。",
       }
     });
-    return response.text?.trim() || "建议根据当前光线强度选择匹配的胶卷。";
-  } catch (e) {
-    return "建议根据当前光线挑选合适的胶卷。";
-  }
+    return response.text?.trim() || "建议根据当前光线挑选匹配的胶卷。";
+  });
 };
 
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: `生成一个针对以下要求的胶片冲洗配方：${prompt}`,
       config: {
-        systemInstruction: "你是一个专业的暗房技师。根据用户提供的胶片冲洗需求生成详细配方。必须返回 JSON 格式。",
+        systemInstruction: "你是一个专业的暗房技师。生成详细配方。必须返回 JSON 格式。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -227,23 +239,19 @@ export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentR
       }
     });
     return JSON.parse(response.text || "null");
-  } catch (e) {
-    return null;
-  }
+  });
 };
 
 export const analyzeStats = async (summary: string): Promise<string> => {
-  try {
+  return safeGenerate(async () => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: `基于以下摄影统计数据给出一段专业的导师建议：${summary}`,
       config: {
-        systemInstruction: "你是一个资深摄影导师。分析用户的拍摄数据，指出创作习惯，并给出进阶建议。使用中文，150字以内。",
+        systemInstruction: "你是一个资深摄影导师。分析拍摄数据，指出创作习惯，给出建议。使用中文。",
       }
     });
-    return response.text?.trim() || "无法获取 AI 数据分析结果。";
-  } catch (e) {
-    return "AI 引擎繁忙，请稍后再试。";
-  }
+    return response.text?.trim() || "分析结果暂时无法显示。";
+  });
 };

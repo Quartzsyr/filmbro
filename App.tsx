@@ -55,9 +55,9 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
             await onAnalyze(photo.id, photo.url);
         } catch (e: any) {
             if (e.message === 'API_KEY_MISSING') {
-                alert("请在“我的”页面下方输入您的 Gemini API Key 并保存。");
+                alert("⚠️ 请在“我的”页面下方输入您的 Gemini API Key 并保存。");
             } else {
-                alert("AI 分析暂时不可用，请检查网络或密钥有效性。");
+                alert(`❌ AI 分析失败: ${e.message}`);
             }
         } finally {
             setIsAnalyzing(false);
@@ -113,7 +113,7 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
 export default function App() {
   const [currentView, setCurrentView] = useState<View>(View.SPLASH);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isTestLoading, setIsTestLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const [rolls, setRolls] = useState<Roll[]>([]);
@@ -136,8 +136,7 @@ export default function App() {
               const savedProfile = localStorage.getItem('film_archive_profile_v3');
               if (savedProfile) setUserProfile(JSON.parse(savedProfile));
               
-              // 尝试加载每日箴言（如果 Key 已就绪）
-              if (apiKeyInput || process.env.API_KEY) {
+              if (apiKeyInput) {
                 const insight = await getDailyInsight();
                 setDailyInsight(insight);
               }
@@ -163,12 +162,27 @@ export default function App() {
   };
 
   const handleSaveApiKey = async () => {
-    localStorage.setItem('LOCAL_GEMINI_KEY', apiKeyInput);
-    alert("API 密钥已保存到本地。");
+    if (!apiKeyInput.trim()) {
+        alert("请输入有效的 API Key");
+        return;
+    }
+    setIsTestLoading(true);
     try {
+        // 先存储，以便测试函数能读到
+        localStorage.setItem('LOCAL_GEMINI_KEY', apiKeyInput);
+        // 手动同步 process.env 以免内存缓存
+        (window as any).process.env.API_KEY = apiKeyInput;
+
+        // 测试连接
         const insight = await getDailyInsight();
         setDailyInsight(insight);
-    } catch (e) {}
+        alert("✅ API 连接测试成功！Key 已保存。");
+    } catch (e: any) {
+        alert(`❌ 连接测试失败: ${e.message}`);
+        // 可选：如果测试失败，可以决定是否保留 Key。这里选择保留但给出提示。
+    } finally {
+        setIsTestLoading(false);
+    }
   };
 
   const handleScanComplete = async (result: IdentificationResult, image: string) => {
@@ -195,7 +209,6 @@ export default function App() {
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !activeRoll) return;
     const files = Array.from(e.target.files) as File[];
-    setIsUploading(true);
     setUploadProgress(0);
 
     const newPhotos: FilmPhoto[] = [];
@@ -206,7 +219,6 @@ export default function App() {
           id: Math.random().toString(36).substr(2, 9),
           url: resized
         });
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       } catch (err) { console.error("Failed to add photo:", err); }
     }
 
@@ -218,7 +230,6 @@ export default function App() {
 
     setRolls(prev => prev.map(r => r.id === activeRoll.id ? updatedRoll : r));
     await saveRollToDB(updatedRoll);
-    setIsUploading(false);
   };
 
   if (currentView === View.SPLASH || isLoading) {
@@ -314,9 +325,6 @@ export default function App() {
                   <div className="flex flex-col items-center text-center space-y-6">
                       <div className="relative">
                           <img src={userProfile.avatar} className="size-32 rounded-[2.5rem] object-cover border-4 border-primary/20 shadow-2xl" />
-                          <div className="absolute -bottom-2 -right-2 size-10 bg-primary rounded-2xl flex items-center justify-center border-4 border-surface-dark">
-                              <span className="material-symbols-outlined text-white text-sm">verified</span>
-                          </div>
                       </div>
                       <div>
                           <h3 className="text-2xl font-display font-black uppercase tracking-tighter">{userProfile.name}</h3>
@@ -342,23 +350,30 @@ export default function App() {
               </section>
 
               <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">本地 AI 密钥设置</h3>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">本地 AI 密钥设置 (LOCAL KEY)</h3>
                   <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
+                      <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl mb-4">
+                        <p className="text-[10px] text-primary leading-relaxed font-bold">
+                            由于部署环境限制，请手动在下方粘贴您的 Gemini API Key。密钥将仅存储在您的本地浏览器中。
+                        </p>
+                      </div>
                       <div>
                         <label className="text-[10px] text-muted font-black uppercase tracking-widest mb-2 block ml-1">Gemini API Key</label>
-                        <div className="flex gap-3">
+                        <div className="flex flex-col gap-3">
                           <input 
                             type="password" 
                             value={apiKeyInput} 
                             onChange={(e) => setApiKeyInput(e.target.value)} 
                             placeholder="在此输入您的 API 密钥..." 
-                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm font-mono focus:border-primary focus:outline-none transition-all"
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm font-mono focus:border-primary focus:outline-none transition-all"
                           />
                           <button 
                             onClick={handleSaveApiKey}
-                            className="px-6 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                            disabled={isTestLoading}
+                            className="w-full py-4 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                           >
-                            保存
+                            {isTestLoading ? <span className="material-symbols-outlined animate-spin text-sm">sync</span> : <span className="material-symbols-outlined text-sm">verified_user</span>}
+                            {isTestLoading ? '测试连接中...' : '保存并测试连接'}
                           </button>
                         </div>
                       </div>
@@ -370,21 +385,15 @@ export default function App() {
               </section>
 
               <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">我的设备库 (Gears)</h3>
-                  <div className="grid grid-cols-1 gap-3">
-                      {userProfile.gear?.map(item => (
-                          <div key={item.id} className="p-6 bg-surface-dark border border-white/5 rounded-[1.5rem] flex items-center justify-between group hover:border-primary/40 transition-all">
-                              <div className="flex items-center gap-5">
-                                  <div className="size-12 rounded-xl bg-black border border-white/5 flex items-center justify-center">
-                                      <span className="material-symbols-outlined text-primary">{item.type === 'camera' ? 'photo_camera' : 'filter_vintage'}</span>
-                                  </div>
-                                  <div>
-                                      <div className="text-[9px] text-muted font-black uppercase tracking-widest">{item.brand}</div>
-                                      <div className="text-sm font-black uppercase text-white/90">{item.model}</div>
-                                  </div>
-                              </div>
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">系统偏好</h3>
+                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden divide-y divide-white/5">
+                      <div className="flex items-center justify-between p-7">
+                          <div>
+                              <div className="text-base font-black">OLED 纯黑模式</div>
+                              <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">极致深邃对比</div>
                           </div>
-                      ))}
+                          <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-14 h-7 rounded-full relative transition-all ${userProfile.settings?.oledMode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-5 bg-white rounded-full transition-transform ${userProfile.settings?.oledMode ? 'translate-x-7' : 'translate-x-0'}`}></div></button>
+                      </div>
                   </div>
               </section>
           </div>
@@ -414,7 +423,7 @@ export default function App() {
       )}
 
       {currentView === View.ROLL_DETAIL && activeRoll && (
-          <div className="animate-fade-in">
+          <div className="animate-fade-in pb-32">
               <div className="relative h-[50vh] w-full overflow-hidden">
                   <img src={activeRoll.coverImage} className="absolute inset-0 size-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-background-dark via-background-dark/20 to-transparent"></div>
