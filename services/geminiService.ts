@@ -15,7 +15,6 @@ export interface PhotoAnalysisResult {
   rating: number;
 }
 
-// Added missing interfaces for DevelopmentTimer
 export interface DevelopmentStep {
   name: string;
   duration: number; // seconds
@@ -32,7 +31,6 @@ export interface DevelopmentRecipe {
 
 /**
  * 助手函数：清理 Base64 数据
- * 必须移除 data:image/jpeg;base64, 等前缀
  */
 const prepareImageData = (base64Image: string) => {
   if (!base64Image) throw new Error("Image data is empty");
@@ -40,22 +38,25 @@ const prepareImageData = (base64Image: string) => {
 };
 
 /**
- * 识别胶卷型号 - 使用 gemini-3-flash-preview 以获得最快响应
+ * 识别胶片型号
+ * 
+ * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
-  const fallback: IdentificationResult = { brand: "Kodak", name: "Gold 200", iso: 200, type: "Color Negative" };
+  // Use process.env.API_KEY directly as per @google/genai guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
         parts: [
           { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Image) } },
-          { text: "识别照片中的胶卷包装品牌、型号和ISO。请只返回 JSON 格式数据。" }
+          { text: "Identify the film brand, name, and ISO from this image. Respond ONLY with JSON." }
         ]
       },
       config: {
-        systemInstruction: "你是一个专业的胶片摄影器材专家。分析图片并返回 JSON。字段: brand, name, iso (整数), type (类型: Color Negative, B&W, Slide)。不要包含任何 Markdown 说明。",
+        systemInstruction: "You are a professional film photography expert. Return a JSON object with: brand, name, iso (integer), type (Color Negative, B&W, Slide). No markdown.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -70,25 +71,21 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       }
     });
 
-    const text = response.text || "{}";
-    return JSON.parse(text) as IdentificationResult;
-  } catch (error) {
+    return JSON.parse(response.text || "{}") as IdentificationResult;
+  } catch (error: any) {
     console.error("AI 识别失败:", error);
-    return fallback;
+    throw error;
   }
 };
 
 /**
- * AI 分析照片
+ * 分析照片
+ * 
+ * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  const fallback: PhotoAnalysisResult = { 
-    composition: "经典的胶片构图，展现了独特的叙事感。", 
-    mood: "温润的影调，具有强烈的叙事氛围。", 
-    tags: ["Film", "Classic"], 
-    rating: 8.5 
-  };
-
+  // Use process.env.API_KEY directly as per @google/genai guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     let base64Data = photoUrl;
     if (photoUrl.startsWith('http')) {
@@ -101,17 +98,16 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
       });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
         parts: [
           { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Data) } },
-          { text: "作为策展人分析这张照片。请只返回 JSON。" }
+          { text: "Analyze this photo as a curator. Respond ONLY with JSON." }
         ]
       },
       config: {
-        systemInstruction: "分析照片的构图(composition)、氛围(mood)，给出英文标签(tags)和 1-10 的艺术评分(rating)。",
+        systemInstruction: "Analyze composition, mood, provide tags, and a rating (1-10). Response must be JSON.",
         responseMimeType: "application/json"
       }
     });
@@ -119,51 +115,29 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
     return JSON.parse(response.text || "{}") as PhotoAnalysisResult;
   } catch (error) {
     console.error("AI 分析失败:", error);
-    return fallback;
+    return { composition: "分析受限", mood: "经典影调", tags: ["Film"], rating: 8 };
   }
 };
 
 /**
- * AI 生成冲洗配方 - 使用 gemini-3-flash-preview 处理 Q&A 任务
+ * 获取冲洗配方
+ * 
+ * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
+  // Use process.env.API_KEY directly as per @google/genai guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `为以下要求生成胶片冲洗配方: ${prompt}`,
+      contents: `Generate recipe for: ${prompt}`,
       config: {
-        systemInstruction: "你是一个专业的暗房技师。根据用户要求提供详细的冲洗步骤。id 随机。color 字段请从以下 Tailwind CSS 类中选择：text-red-500, text-blue-500, text-green-500, text-purple-500, text-yellow-500, text-pink-500, text-orange-500。duration 以秒为单位。直接返回 JSON，不要包含 markdown。",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            name: { type: Type.STRING },
-            temp: { type: Type.STRING },
-            steps: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  duration: { type: Type.INTEGER },
-                  color: { type: Type.STRING },
-                  description: { type: Type.STRING }
-                },
-                required: ["name", "duration", "color", "description"]
-              }
-            }
-          },
-          required: ["id", "name", "temp", "steps"]
-        }
+        systemInstruction: "Expert darkroom technician. Provide steps in JSON. Colors must be Tailwind classes.",
+        responseMimeType: "application/json"
       }
     });
-
-    const text = response.text || "null";
-    return JSON.parse(text) as DevelopmentRecipe;
+    return JSON.parse(response.text || "null");
   } catch (error) {
-    console.error("AI 配方生成失败:", error);
     return null;
   }
 };
