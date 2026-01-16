@@ -55,9 +55,9 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
             await onAnalyze(photo.id, photo.url);
         } catch (e: any) {
             if (e.message === 'API_KEY_MISSING') {
-                alert("请先在“我的 -> 高级设置”中配置 API 密钥");
+                alert("请在“我的”页面下方输入您的 Gemini API Key 并保存。");
             } else {
-                alert("AI 分析暂时不可用，请检查密钥权限或网络。");
+                alert("AI 分析暂时不可用，请检查网络或密钥有效性。");
             }
         } finally {
             setIsAnalyzing(false);
@@ -120,6 +120,7 @@ export default function App() {
   const [stock, setStock] = useState<StockFilm[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [dailyInsight, setDailyInsight] = useState('光影是时间的琥珀。');
+  const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('LOCAL_GEMINI_KEY') || "");
 
   const [activeRollId, setActiveRollId] = useState<string | null>(null);
   const activeRoll = useMemo(() => rolls.find(r => r.id === activeRollId), [rolls, activeRollId]);
@@ -134,8 +135,12 @@ export default function App() {
               setStock(savedStock);
               const savedProfile = localStorage.getItem('film_archive_profile_v3');
               if (savedProfile) setUserProfile(JSON.parse(savedProfile));
-              const insight = await getDailyInsight();
-              setDailyInsight(insight);
+              
+              // 尝试加载每日箴言（如果 Key 已就绪）
+              if (apiKeyInput || process.env.API_KEY) {
+                const insight = await getDailyInsight();
+                setDailyInsight(insight);
+              }
           } catch (e) { console.error(e); } finally { setIsLoading(false); }
       };
       initLoad();
@@ -155,6 +160,15 @@ export default function App() {
           ...prev,
           settings: { ...prev.settings!, ...newSettings }
       }));
+  };
+
+  const handleSaveApiKey = async () => {
+    localStorage.setItem('LOCAL_GEMINI_KEY', apiKeyInput);
+    alert("API 密钥已保存到本地。");
+    try {
+        const insight = await getDailyInsight();
+        setDailyInsight(insight);
+    } catch (e) {}
   };
 
   const handleScanComplete = async (result: IdentificationResult, image: string) => {
@@ -205,20 +219,6 @@ export default function App() {
     setRolls(prev => prev.map(r => r.id === activeRoll.id ? updatedRoll : r));
     await saveRollToDB(updatedRoll);
     setIsUploading(false);
-  };
-
-  // 密钥选择器处理
-  const handleOpenKeySelector = async () => {
-    // @ts-ignore
-    if (window.aistudio?.openSelectKey) {
-        // @ts-ignore
-        await window.aistudio.openSelectKey();
-        // 按照规范，点击后假设成功，重新获取一段话来验证
-        const insight = await getDailyInsight();
-        setDailyInsight(insight);
-    } else {
-        alert("环境不支持官方密钥选择器，请检查环境变量配置。");
-    }
   };
 
   if (currentView === View.SPLASH || isLoading) {
@@ -302,7 +302,7 @@ export default function App() {
       )}
 
       {currentView === View.PROFILE && (
-          <div className="p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] animate-fade-in max-w-2xl mx-auto space-y-12">
+          <div className="p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] animate-fade-in max-w-2xl mx-auto space-y-12 pb-32">
               <header className="flex justify-between items-center">
                   <h2 className="text-4xl font-display font-black uppercase italic tracking-tighter">我的档案</h2>
                   <button onClick={() => setIsProfileEditorOpen(true)} className="size-14 rounded-2xl bg-primary flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
@@ -342,18 +342,30 @@ export default function App() {
               </section>
 
               <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">高级 AI 设置</h3>
-                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden p-7 flex items-center justify-between shadow-xl">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">本地 AI 密钥设置</h3>
+                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] p-8 space-y-4 shadow-xl">
                       <div>
-                          <div className="text-base font-black">API 密钥管理</div>
-                          <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">配置本地私有密钥以激活 AI</div>
+                        <label className="text-[10px] text-muted font-black uppercase tracking-widest mb-2 block ml-1">Gemini API Key</label>
+                        <div className="flex gap-3">
+                          <input 
+                            type="password" 
+                            value={apiKeyInput} 
+                            onChange={(e) => setApiKeyInput(e.target.value)} 
+                            placeholder="在此输入您的 API 密钥..." 
+                            className="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm font-mono focus:border-primary focus:outline-none transition-all"
+                          />
+                          <button 
+                            onClick={handleSaveApiKey}
+                            className="px-6 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                          >
+                            保存
+                          </button>
+                        </div>
                       </div>
-                      <button 
-                        onClick={handleOpenKeySelector}
-                        className="px-6 py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all"
-                      >
-                        配置密钥
-                      </button>
+                      <div className="flex items-center gap-2 pt-2">
+                        <div className={`size-2 rounded-full ${apiKeyInput ? 'bg-green-500 animate-pulse' : 'bg-muted'}`}></div>
+                        <span className="text-[9px] text-muted font-black uppercase tracking-[0.2em]">{apiKeyInput ? '密钥已就绪' : '等待输入密钥'}</span>
+                      </div>
                   </div>
               </section>
 
@@ -373,41 +385,6 @@ export default function App() {
                               </div>
                           </div>
                       ))}
-                  </div>
-              </section>
-
-              <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">系统与实验室偏好</h3>
-                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden divide-y divide-white/5 shadow-xl">
-                      <div className="flex items-center justify-between p-7">
-                          <div>
-                              <div className="text-base font-black">OLED 纯黑模式</div>
-                              <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">极致深邃对比</div>
-                          </div>
-                          <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-14 h-7 rounded-full relative transition-all ${userProfile.settings?.oledMode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-5 bg-white rounded-full transition-transform ${userProfile.settings?.oledMode ? 'translate-x-7' : 'translate-x-0'}`}></div></button>
-                      </div>
-                      <div className="flex items-center justify-between p-7">
-                          <div>
-                              <div className="text-base font-black">默认冲洗温度</div>
-                              <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">暗房计时器基准</div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                              <span className="text-sm font-black font-mono text-primary">{userProfile.settings?.defaultDevTemp || 20}°{userProfile.settings?.tempUnit}</span>
-                          </div>
-                      </div>
-                  </div>
-              </section>
-
-              <section className="bg-primary/5 border border-primary/10 p-8 rounded-[2.5rem] flex items-center justify-between">
-                  <div className="space-y-1">
-                      <div className="text-[9px] text-primary font-black uppercase tracking-widest">AI 引擎连接状态</div>
-                      <div className="text-sm font-black text-white flex items-center gap-2">
-                          <div className="size-2 bg-green-500 rounded-full animate-pulse"></div>
-                          Gemini 3 Flash 实时就绪
-                      </div>
-                  </div>
-                  <div className="text-right">
-                      <div className="text-[11px] text-white/40 font-mono italic">V3.5 PRO</div>
                   </div>
               </section>
           </div>

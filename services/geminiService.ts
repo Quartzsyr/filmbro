@@ -38,12 +38,20 @@ export interface DevelopmentRecipe {
 }
 
 /**
- * 在调用时即时获取 Key 并创建实例，防止环境变量在构建后丢失
+ * 获取 API Key：优先从本地存储读取，其次读取系统环境变量
  */
+const getActiveApiKey = () => {
+  const localKey = localStorage.getItem('LOCAL_GEMINI_KEY');
+  if (localKey && localKey.trim() !== "") {
+    return localKey.trim();
+  }
+  return process.env.API_KEY || "";
+};
+
 const createAIClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getActiveApiKey();
   if (!apiKey) {
-    console.warn("API_KEY_MISSING: API key is not yet selected or injected.");
+    console.warn("API_KEY_MISSING: 请在个人资料页面设置您的 Gemini API Key");
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
@@ -54,7 +62,6 @@ const prepareImageData = (base64Image: string) => {
   return base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 };
 
-// 升级到最新的 Gemini 3 Flash 模型
 const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
@@ -85,7 +92,7 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
-    console.error("Gemini identifyFilmStock Error:", error);
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
@@ -107,10 +114,10 @@ export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisRes
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            composition: { type: Type.STRING, description: "构图分析与建议" },
-            mood: { type: Type.STRING, description: "影调与意境描述" },
+            composition: { type: Type.STRING },
+            mood: { type: Type.STRING },
             tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            rating: { type: Type.NUMBER, description: "1到10的评分" }
+            rating: { type: Type.NUMBER }
           },
           required: ["composition", "mood", "tags", "rating"]
         }
@@ -118,7 +125,7 @@ export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisRes
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
-    console.error("Gemini analyzePhoto Error:", error);
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
@@ -140,10 +147,10 @@ export const analyzeSceneForFilm = async (base64Data: string, stockNames: string
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            lighting: { type: Type.STRING, description: "环境光线描述" },
-            contrast: { type: Type.STRING, description: "场景反差分析" },
-            recommendation: { type: Type.STRING, description: "推荐的胶片型号" },
-            exposureTip: { type: Type.STRING, description: "针对该场景的曝光建议" }
+            lighting: { type: Type.STRING },
+            contrast: { type: Type.STRING },
+            recommendation: { type: Type.STRING },
+            exposureTip: { type: Type.STRING }
           },
           required: ["lighting", "contrast", "recommendation", "exposureTip"]
         }
@@ -151,7 +158,7 @@ export const analyzeSceneForFilm = async (base64Data: string, stockNames: string
     });
     return JSON.parse(response.text || "{}");
   } catch (error) {
-    console.error("Gemini analyzeScene Error:", error);
+    console.error("Gemini Error:", error);
     throw error;
   }
 };
@@ -180,9 +187,9 @@ export const recommendFilm = async (weather: string, stock: StockFilm[]): Promis
         systemInstruction: "你是一个资深胶片摄影专家。用简洁优美的中文从库存中推荐一款最合适的胶卷。总字数控制在50字以内。",
       }
     });
-    return response.text?.trim() || "建议根据当前光线强度选择 ISO 匹配的胶卷。";
+    return response.text?.trim() || "建议根据当前光线强度选择匹配的胶卷。";
   } catch (e) {
-    return "胶片专家建议根据当前光线情况挑选合适的胶卷。";
+    return "建议根据当前光线挑选合适的胶卷。";
   }
 };
 
@@ -193,7 +200,7 @@ export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentR
       model: DEFAULT_MODEL,
       contents: `生成一个针对以下要求的胶片冲洗配方：${prompt}`,
       config: {
-        systemInstruction: "你是一个专业的暗房技师。根据用户提供的胶片冲洗需求生成详细配方。必须返回 JSON 格式。步骤颜色 color 字段必须是 tailwind text- 颜色类名（如 text-green-500, text-red-500）。",
+        systemInstruction: "你是一个专业的暗房技师。根据用户提供的胶片冲洗需求生成详细配方。必须返回 JSON 格式。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -221,7 +228,6 @@ export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentR
     });
     return JSON.parse(response.text || "null");
   } catch (e) {
-    console.error("Gemini getRecipe Error:", e);
     return null;
   }
 };
@@ -231,14 +237,13 @@ export const analyzeStats = async (summary: string): Promise<string> => {
     const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
-      contents: `基于以下摄影统计数据给出一段专业的导师建议和分析：${summary}`,
+      contents: `基于以下摄影统计数据给出一段专业的导师建议：${summary}`,
       config: {
-        systemInstruction: "你是一个资深摄影导师。分析用户的拍摄数据（包括相机偏好、胶片品牌、ISO 分布等），指出他们的创作习惯，并给出针对性的进阶建议。使用中文，字数在150字以内。",
+        systemInstruction: "你是一个资深摄影导师。分析用户的拍摄数据，指出创作习惯，并给出进阶建议。使用中文，150字以内。",
       }
     });
     return response.text?.trim() || "无法获取 AI 数据分析结果。";
   } catch (e) {
-    console.error("Gemini analyzeStats Error:", e);
-    return "AI 数据分析引擎繁忙，请稍后再试。";
+    return "AI 引擎繁忙，请稍后再试。";
   }
 };
