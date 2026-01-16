@@ -49,6 +49,23 @@ export const DevelopmentTimer: React.FC<DevelopmentTimerProps> = ({ onClose }) =
   const [isGenerating, setIsGenerating] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartRef = useRef<number | null>(null);
+
+  // 手势返回处理
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartRef.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const diffX = currentX - touchStartRef.current;
+    // 从屏幕左侧边缘起步，向右滑动超过100px触发返回
+    if (touchStartRef.current < 40 && diffX > 100) {
+      onClose();
+      touchStartRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (activeRecipe.id !== baseRecipe.id) {
@@ -173,34 +190,41 @@ export const DevelopmentTimer: React.FC<DevelopmentTimerProps> = ({ onClose }) =
   const isAgitationTime = (currentStep.duration - timeLeft) % 60 < 10 && isRunning; 
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#050505] text-gray-100 flex flex-col h-[100dvh] font-display overflow-hidden selection:bg-primary selection:text-white">
+    <div 
+      className="fixed inset-0 z-[100] bg-[#050505] text-gray-100 flex flex-col h-[100dvh] font-display overflow-hidden selection:bg-primary"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
       <div className="absolute inset-0 bg-noise pointer-events-none z-0 mix-blend-overlay opacity-10"></div>
       
       {isSettingsOpen && (
-        <div className="absolute inset-0 z-[110] bg-black/95 backdrop-blur-md flex flex-col p-6 pt-[calc(env(safe-area-inset-top)+1rem)] animate-fade-in">
-           <div className="flex justify-between items-center mb-8">
-               <h2 className="text-xl font-bold uppercase tracking-widest">配方设置</h2>
-               <button onClick={() => setIsSettingsOpen(false)} className="size-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20">
+        <div className="absolute inset-0 z-[120] bg-black/95 backdrop-blur-md flex flex-col p-6 pt-[calc(env(safe-area-inset-top)+2rem)] animate-fade-in">
+           <div className="flex justify-between items-center mb-10">
+               <h2 className="text-xl font-black uppercase tracking-widest">配方设置</h2>
+               <button onClick={() => setIsSettingsOpen(false)} className="size-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 active:scale-90 transition-all">
                    <span className="material-symbols-outlined">close</span>
                </button>
            </div>
-           <div className="space-y-6 overflow-y-auto pb-20 no-scrollbar">
+           <div className="space-y-8 overflow-y-auto pb-24 no-scrollbar">
                <div>
-                   <label className="block text-xs font-bold text-primary uppercase tracking-wider mb-2">AI 智能配方生成</label>
+                   <label className="block text-xs font-black text-primary uppercase tracking-[0.2em] mb-4">AI 智能配方生成</label>
                    <form onSubmit={handleGenerateRecipe} className="relative">
-                       <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="例如: Kodak Tri-X 400 迫冲到 1600..." className="w-full bg-[#111] border border-white/20 rounded-lg py-4 pl-4 pr-12 text-sm focus:border-primary outline-none transition-colors" />
-                       <button type="submit" disabled={isGenerating || !prompt} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-white disabled:opacity-30">
-                           {isGenerating ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined">arrow_upward</span>}
+                       <input type="text" value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="例如: Kodak Tri-X 400 迫冲到 1600..." className="w-full bg-[#111] border border-white/10 rounded-xl py-5 pl-5 pr-14 text-sm focus:border-primary outline-none transition-all shadow-inner" />
+                       <button type="submit" disabled={isGenerating || !prompt} className="absolute right-3 top-1/2 -translate-y-1/2 size-10 flex items-center justify-center text-primary disabled:opacity-30">
+                           {isGenerating ? <span className="material-symbols-outlined animate-spin">sync</span> : <span className="material-symbols-outlined text-3xl">arrow_circle_up</span>}
                        </button>
                    </form>
                </div>
                <div>
-                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">预设配方</label>
-                   <div className="grid gap-2">
+                   <label className="block text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-4">预设配方</label>
+                   <div className="grid gap-3">
                        {INITIAL_RECIPES.map(recipe => (
-                           <button key={recipe.id} onClick={() => { setActiveRecipe(recipe); setBaseRecipe(JSON.parse(JSON.stringify(recipe))); setCurrentStepIndex(0); setTimeLeft(recipe.steps[0].duration); setCurrentTemp(parseInt(recipe.temp) || 20); setIsRunning(false); setIsFinished(false); setIsSettingsOpen(false); }} className={`flex items-center justify-between p-4 rounded-lg border transition-all ${activeRecipe.id === recipe.id ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 hover:border-white/30'}`}>
-                               <span className="font-bold">{recipe.name}</span>
-                               <span className="text-xs font-mono opacity-70">{recipe.temp}</span>
+                           <button key={recipe.id} onClick={() => { setActiveRecipe(recipe); setBaseRecipe(JSON.parse(JSON.stringify(recipe))); setCurrentStepIndex(0); setTimeLeft(recipe.steps[0].duration); setCurrentTemp(parseInt(recipe.temp) || 20); setIsRunning(false); setIsFinished(false); setIsSettingsOpen(false); }} className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${activeRecipe.id === recipe.id ? 'bg-primary/20 border-primary shadow-[0_0_20px_rgba(166,23,39,0.1)]' : 'bg-white/5 border-white/10 hover:border-white/20'}`}>
+                               <div className="text-left">
+                                 <div className={`font-bold uppercase tracking-wider ${activeRecipe.id === recipe.id ? 'text-primary' : 'text-white'}`}>{recipe.name}</div>
+                                 <div className="text-[10px] opacity-40 mt-1 font-mono">{recipe.steps.length} 步骤</div>
+                               </div>
+                               <span className="text-xs font-black font-mono opacity-70">{recipe.temp}</span>
                            </button>
                        ))}
                    </div>
@@ -209,36 +233,37 @@ export const DevelopmentTimer: React.FC<DevelopmentTimerProps> = ({ onClose }) =
         </div>
       )}
 
-      <nav className="flex items-center justify-between p-6 pt-[calc(env(safe-area-inset-top)+1rem)] pb-2 z-10 relative shrink-0">
-        <button onClick={onClose} className="flex items-center justify-center size-10 rounded text-gray-300 hover:bg-white/10 transition-colors">
-          <span className="material-symbols-outlined text-2xl">arrow_back</span>
+      {/* 增强顶部栏安全区 */}
+      <nav className="flex items-center justify-between px-6 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-4 z-10 relative shrink-0 bg-gradient-to-b from-[#050505] to-transparent">
+        <button onClick={onClose} className="flex items-center justify-center size-12 -ml-2 rounded-full text-gray-300 hover:bg-white/10 active:scale-90 transition-all">
+          <span className="material-symbols-outlined text-3xl">arrow_back</span>
         </button>
         <div className="flex flex-col items-center">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-primary font-bold mb-1">Darkroom Lab</span>
-          <h1 className="text-sm font-bold tracking-tight text-white">{activeRecipe.name}</h1>
+          <span className="text-[9px] uppercase tracking-[0.4em] text-primary font-black mb-1 opacity-80">Process Control</span>
+          <h1 className="text-xs font-black tracking-widest text-white uppercase">{activeRecipe.name}</h1>
         </div>
-        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center size-10 rounded text-gray-300 hover:bg-white/10 transition-colors">
-          <span className="material-symbols-outlined text-2xl">settings</span>
+        <button onClick={() => setIsSettingsOpen(true)} className="flex items-center justify-center size-12 -mr-2 rounded-full text-gray-300 hover:bg-white/10 active:scale-90 transition-all">
+          <span className="material-symbols-outlined text-3xl">tune</span>
         </button>
       </nav>
 
       <main className="flex-1 flex flex-col relative w-full max-w-md mx-auto px-6 z-10 justify-between min-h-0">
         <div className="flex flex-col items-center justify-center mt-2 shrink-0">
             <div className="group relative flex flex-col items-center">
-                <span className="text-xs uppercase tracking-widest text-gray-500 mb-1">Temperature</span>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => adjustTemperature(-1)} className="size-8 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-all"><span className="material-symbols-outlined text-lg">remove</span></button>
-                    <div className="flex items-baseline gap-1 relative min-w-[100px] justify-center">
-                        <span className="text-5xl font-mono font-medium text-primary drop-shadow-[0_0_15px_rgba(166,23,39,0.6)]">{currentTemp.toFixed(1)}</span>
-                        <span className="text-xl text-primary/70 font-light">°C</span>
+                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-500 font-black mb-2">Temp Target</span>
+                <div className="flex items-center gap-6">
+                    <button onClick={() => adjustTemperature(-1)} className="size-10 rounded-full bg-white/5 border border-white/5 flex items-center justify-center active:scale-90 transition-all hover:bg-white/10 shadow-lg"><span className="material-symbols-outlined text-xl">remove</span></button>
+                    <div className="flex items-baseline gap-1 relative min-w-[120px] justify-center">
+                        <span className="text-6xl font-mono font-black text-primary drop-shadow-[0_0_20px_rgba(166,23,39,0.5)]">{currentTemp.toFixed(1)}</span>
+                        <span className="text-xl text-primary/70 font-black">°C</span>
                     </div>
-                    <button onClick={() => adjustTemperature(1)} className="size-8 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-all"><span className="material-symbols-outlined text-lg">add</span></button>
+                    <button onClick={() => adjustTemperature(1)} className="size-10 rounded-full bg-white/5 border border-white/5 flex items-center justify-center active:scale-90 transition-all hover:bg-white/10 shadow-lg"><span className="material-symbols-outlined text-xl">add</span></button>
                 </div>
             </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center relative w-full min-h-0 overflow-hidden">
-            <div className="relative w-full h-full max-h-[40vh] min-h-[200px] flex items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center relative w-full min-h-0 overflow-hidden py-4">
+            <div className="relative w-full h-full max-h-[38vh] min-h-[180px] flex items-center justify-center">
                  <div className="relative w-64 h-80 transform scale-75 sm:scale-100 origin-center transition-transform">
                      <div className="relative w-40 h-56 z-10 flex flex-col items-center mx-auto">
                         <div className="w-12 h-4 bg-[#1a1a1a] border border-gray-800 rounded-t-sm mb-[1px]"></div>
@@ -248,62 +273,62 @@ export const DevelopmentTimer: React.FC<DevelopmentTimerProps> = ({ onClose }) =
                                 <div className={`w-full h-full opacity-30 ${currentLiquidColor} transition-colors duration-500`}></div>
                             </div>
                         </div>
-                        <div className="absolute bottom-4 bg-black/60 px-2 py-0.5 rounded border border-gray-800">
-                            <span className="text-[9px] uppercase tracking-widest text-gray-400">Tank Ready</span>
+                        <div className="absolute bottom-4 bg-black/60 px-3 py-1 rounded-full border border-gray-800">
+                            <span className="text-[8px] uppercase tracking-[0.3em] text-gray-400 font-black">Submerged</span>
                         </div>
                      </div>
                  </div>
             </div>
-            <div className="text-center space-y-1 min-h-[80px] shrink-0 mb-4 z-20">
+            <div className="text-center space-y-2 min-h-[90px] shrink-0 mb-4 z-20">
                 {isFinished ? (
-                     <>
-                        <h2 className="text-2xl font-bold text-green-500 tracking-tight">完成 (Finished)</h2>
-                        <p className="text-sm text-gray-500 font-mono">所有步骤已结束</p>
-                     </>
+                     <div className="animate-fade-in">
+                        <h2 className="text-3xl font-black text-green-500 tracking-tighter uppercase">Success</h2>
+                        <p className="text-[10px] text-gray-500 font-mono tracking-widest uppercase mt-1">Darkroom work finished</p>
+                     </div>
                 ) : (
-                    <>
-                        <h2 className={`text-2xl font-bold tracking-tight animate-fade-in ${isAgitationTime ? 'text-primary animate-pulse' : 'text-white'}`}>
-                            {isAgitationTime ? '搅动 (Agitate)' : '静置 (Stand)'}
+                    <div className="animate-fade-in">
+                        <h2 className={`text-3xl font-black tracking-tighter uppercase transition-colors duration-500 ${isAgitationTime ? 'text-primary animate-pulse' : 'text-white'}`}>
+                            {isAgitationTime ? 'Agitate' : 'Resting'}
                         </h2>
-                        <p className="text-sm text-gray-500 font-mono">
-                            第 {currentCycle} / {totalCycles} 轮 • {isAgitationTime ? '请颠倒显影罐' : '请保持静置'}
+                        <p className="text-[10px] text-gray-500 font-black tracking-[0.2em] uppercase mt-1">
+                            Cycle {currentCycle} / {totalCycles} • {isAgitationTime ? 'Invert the tank' : 'Keep stable'}
                         </p>
-                        <p className="text-xs text-gray-600 mt-2 max-w-[200px] mx-auto leading-tight">{currentStep.description}</p>
-                    </>
+                        <p className="text-[10px] text-gray-400 mt-3 max-w-[240px] mx-auto leading-relaxed font-bold opacity-70 italic">{currentStep.description}</p>
+                    </div>
                 )}
             </div>
         </div>
 
-        <div className="w-full space-y-6 shrink-0 bg-[#050505] pt-2 pb-8 z-20">
-            <div className="w-full">
-                <div className="flex justify-between text-[10px] uppercase tracking-wider text-gray-500 mb-2">
-                    {activeRecipe.steps.map((step, idx) => (<span key={idx} className={`${idx === currentStepIndex ? 'text-white font-bold' : ''}`}>{step.name.split(' ')[0]}</span>))}
+        <div className="w-full space-y-8 shrink-0 bg-[#050505] pt-4 pb-12 z-20">
+            <div className="w-full px-2">
+                <div className="flex justify-between text-[8px] uppercase tracking-[0.2em] text-gray-600 mb-3 font-black">
+                    {activeRecipe.steps.map((step, idx) => (<span key={idx} className={`transition-colors duration-500 ${idx === currentStepIndex ? 'text-primary' : ''}`}>{step.name.split(' ')[0]}</span>))}
                 </div>
-                <div className="h-1 w-full bg-gray-900 rounded-full overflow-hidden flex">
+                <div className="h-1.5 w-full bg-gray-900 rounded-full overflow-hidden flex shadow-inner">
                      {activeRecipe.steps.map((step, idx) => {
                          let bgClass = 'bg-gray-800';
-                         if (idx < currentStepIndex) bgClass = step.color.replace('text-', 'bg-') + '/50'; 
+                         if (idx < currentStepIndex) bgClass = step.color.replace('text-', 'bg-') + '/40'; 
                          if (idx === currentStepIndex) bgClass = step.color.replace('text-', 'bg-');
-                         return (<div key={idx} className={`h-full border-r border-black transition-colors duration-500 ${bgClass}`} style={{ flex: 1 }}></div>);
+                         return (<div key={idx} className={`h-full border-r border-black transition-all duration-700 ${bgClass}`} style={{ flex: 1 }}></div>);
                      })}
                 </div>
-                <div className="flex justify-between mt-2 font-mono text-xs text-gray-400">
-                    <span className="text-xl text-white">{formatTime(timeLeft)}</span>
-                    <span>-{formatTime(activeRecipe.steps.reduce((acc, s, i) => i > currentStepIndex ? acc + s.duration : acc, 0))}</span>
+                <div className="flex justify-between mt-3 font-mono">
+                    <span className="text-3xl font-black text-white tabular-nums">{formatTime(timeLeft)}</span>
+                    <span className="text-sm font-black text-white/30 self-end mb-1 tabular-nums">-{formatTime(activeRecipe.steps.reduce((acc, s, i) => i > currentStepIndex ? acc + s.duration : acc, 0))}</span>
                 </div>
             </div>
-            {!isFinished && (
-                <div className="flex items-center justify-between gap-4 px-4">
-                    <button onClick={resetStep} className="size-12 rounded-full border border-gray-800 text-gray-400 flex items-center justify-center active:scale-95"><span className="material-symbols-outlined text-xl">restart_alt</span></button>
-                    <button onClick={toggleTimer} className="h-16 flex-1 rounded-full bg-surface-dark border border-gray-800 flex items-center justify-center gap-3 text-white active:scale-[0.98] transition-all group relative overflow-hidden">
-                        <div className={`absolute inset-0 bg-primary/10 w-0 transition-all duration-500 ${!isRunning ? 'w-full' : 'group-hover:w-full'}`}></div>
-                        <span className={`material-symbols-outlined fill-1 text-primary transition-colors ${!isRunning ? 'text-white' : ''}`}>{isRunning ? 'pause' : 'play_arrow'}</span>
-                        <span className="font-bold tracking-wide text-lg">{isRunning ? 'PAUSE' : 'START'}</span>
+            {!isFinished ? (
+                <div className="flex items-center justify-between gap-5">
+                    <button onClick={resetStep} className="size-14 rounded-2xl border border-white/5 bg-white/5 text-gray-400 flex items-center justify-center active:scale-90 transition-all hover:bg-white/10"><span className="material-symbols-outlined text-2xl">restart_alt</span></button>
+                    <button onClick={toggleTimer} className="h-16 flex-1 rounded-2xl bg-primary border border-primary/20 flex items-center justify-center gap-4 text-white active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(166,23,39,0.3)]">
+                        <span className={`material-symbols-outlined fill-1 text-3xl`}>{isRunning ? 'pause_circle' : 'play_circle'}</span>
+                        <span className="font-black tracking-[0.2em] text-lg uppercase">{isRunning ? 'Pause' : 'Start'}</span>
                     </button>
-                    <button onClick={nextStep} className="size-12 rounded-full border border-gray-800 text-gray-400 flex items-center justify-center active:scale-95"><span className="material-symbols-outlined text-xl">skip_next</span></button>
+                    <button onClick={nextStep} className="size-14 rounded-2xl border border-white/5 bg-white/5 text-gray-400 flex items-center justify-center active:scale-90 transition-all hover:bg-white/10"><span className="material-symbols-outlined text-2xl">skip_next</span></button>
                 </div>
+            ) : (
+                <button onClick={onClose} className="w-full h-16 rounded-2xl bg-white text-black font-black text-lg uppercase tracking-widest animate-bounce shadow-2xl">Exit Lab</button>
             )}
-            {isFinished && (<button onClick={onClose} className="w-full py-4 rounded-full bg-white text-black font-bold text-lg">退出暗房 (Exit)</button>)}
         </div>
       </main>
     </div>

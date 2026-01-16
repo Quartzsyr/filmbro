@@ -6,26 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Film Archive AI</title>
     
-    <!-- Favicon & Icons -->
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="alternate icon" type="image/png" href="./favicon.svg" />
-    <link rel="mask-icon" href="./favicon.svg" color="#a61727" />
-    
-    <!-- PWA Settings for iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0a0a0a" />
-    <link rel="apple-touch-icon" href="./favicon.svg" />
     
-    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;700;900&family=Manrope:wght@300;400;600&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-    
-    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;700;900&family=Space+Mono:wght@400;700&family=Manrope:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -33,13 +23,11 @@
         theme: {
           extend: {
             colors: {
-              primary: "#a61727", // Ruby Red
-              "primary-hover": "#d92b3e",
-              "background-light": "#f6f5f4",
-              "background-dark": "#0a0a0a",
-              "surface-dark": "#121212",
-              "surface-highlight": "#1A1A1A",
-              muted: "#A0A0A0",
+              primary: "#a61727",
+              "background-dark": "#050505",
+              "surface-dark": "#0f0f0f",
+              "surface-highlight": "#161616",
+              muted: "#707070",
             },
             fontFamily: {
               display: ["Epilogue", "sans-serif"],
@@ -47,49 +35,61 @@
               mono: ["Space Mono", "monospace"],
             },
             animation: {
-              'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              'spin-slow': 'spin 12s linear infinite',
-              'fade-in': 'fadeIn 0.5s ease-out',
+              'fade-in': 'fadeIn 0.4s ease-out',
+              'shutter': 'shutterEffect 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
             },
             keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
+              fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+              shutterEffect: {
+                '0%': { transform: 'scaleY(0)', opacity: '0' },
+                '50%': { transform: 'scaleY(1)', opacity: '1' },
+                '100%': { transform: 'scaleY(1)', opacity: '1' }
               }
-            },
-            backgroundImage: {
-              'noise': "url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%220.05%22/%3E%3C/svg%3E')",
             }
           },
         },
       }
     </script>
     <style>
+      :root {
+        --safe-top: env(safe-area-inset-top);
+        --safe-bottom: env(safe-area-inset-bottom);
+      }
       body {
-        background-color: #0a0a0a;
+        background-color: #050505;
         color: white;
         overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
       }
-      .no-scrollbar::-webkit-scrollbar {
-          display: none;
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      /* Global Apple-style range slider */
+      input[type="range"] { -webkit-appearance: none; background: transparent; }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        height: 28px; width: 28px;
+        border-radius: 50%; background: #a61727;
+        cursor: pointer; margin-top: -12px;
+        box-shadow: 0 4px 15px rgba(166, 23, 39, 0.4);
       }
-      .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+      input[type="range"]::-webkit-slider-runnable-track {
+        width: 100%; height: 4px; cursor: pointer;
+        background: rgba(255, 255, 255, 0.1); border-radius: 2px;
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom": "https://esm.sh/react-dom@^19.2.3",
     "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
     "@google/genai": "https://esm.sh/@google/genai@^1.36.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "html2canvas": "https://esm.sh/html2canvas@1.4.1",
-    "vite": "https://esm.sh/vite@^7.3.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "vite": "https://esm.sh/vite@^7.3.1",
     "vite-plugin-pwa": "https://esm.sh/vite-plugin-pwa@^1.2.0"
   }
 }

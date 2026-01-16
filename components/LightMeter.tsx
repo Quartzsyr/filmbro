@@ -21,15 +21,30 @@ export const LightMeter: React.FC<LightMeterProps> = ({ onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const touchStartRef = useRef<number | null>(null);
   
   const [iso, setIso] = useState(400);
   const [mode, setMode] = useState<'AV' | 'TV'>('AV');
   const [selectedAperture, setSelectedAperture] = useState(2.8);
   const [selectedShutter, setSelectedShutter] = useState("1/60");
-  const [showZoneSystem, setShowZoneSystem] = useState(false); 
   const [evOffset, setEvOffset] = useState(0);
   const [measuredEv, setMeasuredEv] = useState(10);
   const [isLocked, setIsLocked] = useState(false);
+
+  // 手势返回处理
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartRef.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const diffX = currentX - touchStartRef.current;
+    if (touchStartRef.current < 40 && diffX > 100) {
+      onClose();
+      touchStartRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const startCamera = async () => {
@@ -85,52 +100,111 @@ export const LightMeter: React.FC<LightMeterProps> = ({ onClose }) => {
     });
 
   return (
-    <div className="fixed inset-0 z-[100] bg-[#121212] flex flex-col font-mono text-gray-200">
-      <div className="flex justify-between items-center p-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-[#1a1a1a] border-b border-white/10 z-20">
-        <h2 className="text-sm font-bold tracking-widest uppercase text-primary flex items-center gap-2">
-            <span className="material-symbols-outlined">exposure</span>
-            手机测光表
-        </h2>
-        <button onClick={onClose} className="text-white/50 hover:text-white p-2">
-            <span className="material-symbols-outlined">close</span>
+    <div 
+      className="fixed inset-0 z-[100] bg-[#121212] flex flex-col font-mono text-gray-200 overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
+      {/* 增强顶部栏安全区 */}
+      <div className="flex justify-between items-center px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-4 bg-[#1a1a1a] border-b border-white/5 z-20 shadow-2xl">
+        <button onClick={onClose} className="size-12 rounded-full hover:bg-white/5 flex items-center justify-center active:scale-90 transition-all -ml-2">
+            <span className="material-symbols-outlined text-3xl">arrow_back</span>
         </button>
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] font-black tracking-[0.3em] uppercase text-primary mb-1">Light Sensor</span>
+          <h2 className="text-xs font-black tracking-widest uppercase text-white/80">Digital Metering</h2>
+        </div>
+        <div className="size-12 -mr-2 flex items-center justify-center opacity-30">
+            <span className="material-symbols-outlined">exposure</span>
+        </div>
       </div>
 
       <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center group">
-        <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+        <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover opacity-60" />
         <canvas ref={canvasRef} className="hidden" />
+        
+        {/* Viewfinder Graphics */}
         <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
-             <div className={`size-24 border-2 rounded-full flex items-center justify-center backdrop-blur-[1px] ${isLocked ? 'border-red-500 bg-red-500/10' : 'border-white/50 bg-white/5'}`}>
-                 <div className={`size-1.5 rounded-full ${isLocked ? 'bg-red-500' : 'bg-primary'}`}></div>
+             <div className="absolute inset-10 border border-white/10 rounded-3xl"></div>
+             <div className={`size-32 border-2 rounded-full flex items-center justify-center backdrop-blur-[1px] transition-all duration-500 ${isLocked ? 'border-primary bg-primary/10' : 'border-white/30 bg-white/5'}`}>
+                 <div className={`size-2 rounded-full ${isLocked ? 'bg-primary animate-ping' : 'bg-primary'}`}></div>
+             </div>
+             {/* Rule of Thirds */}
+             <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-20">
+                <div className="border-r border-b border-white/20"></div><div className="border-r border-b border-white/20"></div><div className="border-b border-white/20"></div>
+                <div className="border-r border-b border-white/20"></div><div className="border-r border-b border-white/20"></div><div className="border-b border-white/20"></div>
+                <div className="border-r border-white/20"></div><div className="border-r border-white/20"></div><div></div>
              </div>
         </div>
-        <button onClick={() => setIsLocked(!isLocked)} className={`absolute bottom-6 right-6 size-16 rounded-full flex items-center justify-center shadow-lg border-2 z-30 ${isLocked ? 'bg-red-600 border-red-400 text-white' : 'bg-white text-black border-gray-300'}`}>
-            <span className="material-symbols-outlined text-2xl">{isLocked ? 'lock' : 'lock_open'}</span>
+
+        <button 
+          onClick={() => setIsLocked(!isLocked)} 
+          className={`absolute bottom-8 right-8 size-20 rounded-2xl flex flex-col items-center justify-center shadow-2xl border transition-all z-30 ${isLocked ? 'bg-primary border-primary text-white scale-95 shadow-primary/20' : 'bg-white text-black border-white active:scale-90'}`}
+        >
+            <span className="material-symbols-outlined text-3xl">{isLocked ? 'lock' : 'lock_open'}</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter mt-1">{isLocked ? 'HOLD' : 'FREE'}</span>
         </button>
       </div>
 
-      <div className="bg-[#1a1a1a] p-6 pb-12 border-t border-white/10 z-20 flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-              <div>
-                  <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">测量值 (EV)</div>
-                  <div className={`text-3xl font-mono font-light ${isLocked ? 'text-red-500' : 'text-white'}`}>EV {measuredEv.toFixed(1)}</div>
+      <div className="bg-[#1a1a1a] p-8 pb-[calc(env(safe-area-inset-bottom)+2rem)] border-t border-white/10 z-20 flex flex-col gap-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+          <div className="flex items-end justify-between">
+              <div className="space-y-1">
+                  <div className="text-[10px] text-primary font-black uppercase tracking-widest">Ambient EV</div>
+                  <div className={`text-4xl font-mono font-black tabular-nums transition-colors ${isLocked ? 'text-primary' : 'text-white'}`}>{measuredEv.toFixed(1)}</div>
               </div>
-              <div className="text-right">
-                  <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">{mode === 'AV' ? '推荐快门' : '推荐光圈'}</div>
-                  <div className={`text-5xl font-mono font-bold text-primary`}>{resultValue}</div>
+              <div className="text-right space-y-1">
+                  <div className="text-[10px] text-muted font-black uppercase tracking-widest">{mode === 'AV' ? 'Shutter Speed' : 'Aperture'}</div>
+                  <div className={`text-6xl font-mono font-black text-primary drop-shadow-[0_0_15px_rgba(166,23,39,0.3)] tabular-nums`}>{resultValue}</div>
               </div>
           </div>
-          <div className="flex gap-4">
-              <div className="flex-1 space-y-2 overflow-hidden">
-                  <label className="text-[9px] uppercase tracking-widest text-gray-500">ISO</label>
-                  <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-                      {ISO_VALUES.map(val => (<button key={val} onClick={() => setIso(val)} className={`shrink-0 px-3 py-2 rounded border text-xs font-bold ${iso === val ? 'bg-white text-black border-white' : 'text-gray-500 border-white/10'}`}>{val}</button>))}
+
+          <div className="flex flex-col gap-6">
+              <div className="space-y-3">
+                  <label className="text-[9px] font-black uppercase tracking-[0.3em] text-muted ml-1 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[12px]">filter_vintage</span>
+                    Sensitivity (ISO)
+                  </label>
+                  <div className="flex overflow-x-auto no-scrollbar gap-2.5 pb-2 -mx-1 px-1">
+                      {ISO_VALUES.map(val => (
+                        <button 
+                          key={val} 
+                          onClick={() => setIso(val)} 
+                          className={`shrink-0 px-5 py-3 rounded-xl border text-xs font-black transition-all ${iso === val ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'text-gray-500 border-white/5 bg-white/5 active:scale-90'}`}
+                        >
+                          {val}
+                        </button>
+                      ))}
                   </div>
               </div>
-              <div className="flex-1 space-y-2 overflow-hidden">
-                  <button onClick={() => setMode(mode === 'AV' ? 'TV' : 'AV')} className="text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-primary uppercase font-bold">{mode === 'AV' ? '光圈优先' : '快门优先'}</button>
-                  <div className="flex overflow-x-auto no-scrollbar gap-2 pb-2">
-                      {mode === 'AV' ? APERTURES.map(f => (<button key={f} onClick={() => setSelectedAperture(f)} className={`shrink-0 px-3 py-2 rounded border text-xs font-bold ${selectedAperture === f ? 'bg-primary text-white border-primary' : 'text-gray-500 border-white/10'}`}>{f}</button>)) : SHUTTERS.map(s => (<button key={s} onClick={() => setSelectedShutter(s)} className={`shrink-0 px-3 py-2 rounded border text-xs font-bold ${selectedShutter === s ? 'bg-primary text-white border-primary' : 'text-gray-500 border-white/10'}`}>{s}</button>))}
+
+              <div className="space-y-3">
+                  <div className="flex justify-between items-center pr-2">
+                    <label className="text-[9px] font-black uppercase tracking-[0.3em] text-muted ml-1 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[12px]">settings_input_component</span>
+                      Priority Mode
+                    </label>
+                    <button onClick={() => setMode(mode === 'AV' ? 'TV' : 'AV')} className="text-[9px] px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 uppercase font-black tracking-widest active:scale-95 transition-all">
+                      {mode === 'AV' ? 'Aperture Pri.' : 'Shutter Pri.'}
+                    </button>
+                  </div>
+                  <div className="flex overflow-x-auto no-scrollbar gap-2.5 pb-2 -mx-1 px-1">
+                      {mode === 'AV' ? APERTURES.map(f => (
+                        <button 
+                          key={f} 
+                          onClick={() => setSelectedAperture(f)} 
+                          className={`shrink-0 px-5 py-3 rounded-xl border text-xs font-black transition-all ${selectedAperture === f ? 'bg-primary text-white border-primary shadow-lg' : 'text-gray-500 border-white/5 bg-white/5 active:scale-90'}`}
+                        >
+                          f/{f}
+                        </button>
+                      )) : SHUTTERS.map(s => (
+                        <button 
+                          key={s} 
+                          onClick={() => setSelectedShutter(s)} 
+                          className={`shrink-0 px-5 py-3 rounded-xl border text-xs font-black transition-all ${selectedShutter === s ? 'bg-primary text-white border-primary shadow-lg' : 'text-gray-500 border-white/5 bg-white/5 active:scale-90'}`}
+                        >
+                          {s}
+                        </button>
+                      ))}
                   </div>
               </div>
           </div>

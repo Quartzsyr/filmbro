@@ -7,10 +7,9 @@ interface FilmFridgeProps {
   stock: StockFilm[];
   onUpdateStock: (stock: StockFilm[]) => void;
   onClose: () => void;
-  onOpenKeyModal: () => void;
 }
 
-export const FilmFridge: React.FC<FilmFridgeProps> = ({ stock, onUpdateStock, onClose, onOpenKeyModal }) => {
+export const FilmFridge: React.FC<FilmFridgeProps> = ({ stock, onUpdateStock, onClose }) => {
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [isRecommending, setIsRecommending] = useState(false);
   const [weather, setWeather] = useState('获取天气中...');
@@ -40,7 +39,7 @@ export const FilmFridge: React.FC<FilmFridgeProps> = ({ stock, onUpdateStock, on
       const advice = await recommendFilm(weather, stock);
       setRecommendation(advice);
     } catch (e: any) {
-      if (e.message === "API_KEY_MISSING") onOpenKeyModal();
+      console.error("Failed to get recommendation", e);
     } finally {
       setIsRecommending(false);
     }

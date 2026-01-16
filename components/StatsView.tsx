@@ -6,10 +6,9 @@ import { analyzeStats } from '../services/geminiService';
 interface StatsViewProps {
   rolls: Roll[];
   stock: StockFilm[];
-  onOpenKeyModal?: () => void;
 }
 
-export const StatsView: React.FC<StatsViewProps> = ({ rolls, stock, onOpenKeyModal }) => {
+export const StatsView: React.FC<StatsViewProps> = ({ rolls, stock }) => {
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -44,7 +43,7 @@ export const StatsView: React.FC<StatsViewProps> = ({ rolls, stock, onOpenKeyMod
       const report = await analyzeStats(summary);
       setAiReport(report);
     } catch (e: any) {
-      if (e.message === "API_KEY_MISSING" && onOpenKeyModal) onOpenKeyModal();
+      console.error("AI Analysis failed", e);
     } finally {
       setIsAnalyzing(false);
     }

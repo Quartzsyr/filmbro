@@ -12,7 +12,9 @@ export enum View {
   LIGHT_METER = 'LIGHT_METER',
   FRIDGE = 'FRIDGE',
   NEGATIVE_INVERTER = 'NEGATIVE_INVERTER',
-  CHEM_CALC = 'CHEM_CALC'
+  CHEM_CALC = 'CHEM_CALC',
+  SCENE_SCOUT = 'SCENE_SCOUT',
+  RECIPROCITY_LAB = 'RECIPROCITY_LAB'
 }
 
 export enum RollStatus {
@@ -36,14 +38,14 @@ export interface PhotoAnalysis {
   composition: string;
   mood: string;
   tags: string[];
-  rating: number; // 1-10
+  rating: number; 
 }
 
 export interface FilmPhoto {
   id: string;
   url: string;
-  exif?: ExifData; // Per-photo override
-  analysis?: PhotoAnalysis; // AI Analysis data
+  exif?: ExifData;
+  analysis?: PhotoAnalysis;
 }
 
 export interface Roll {
@@ -51,20 +53,28 @@ export interface Roll {
   brand: string;
   name: string;
   iso: number;
-  camera: string; // Used as default for EXIF
+  camera: string;
   date: string;
   status: RollStatus;
   coverImage: string;
   photos: FilmPhoto[];
   framesTaken: number;
   totalFrames: number;
-  defaultExif?: ExifData; // Batch defaults
+  defaultExif?: ExifData;
 }
 
 export interface UserSettings {
   tempUnit: 'C' | 'F';
   oledMode: boolean;
   autoAnalyze: boolean;
+  defaultDevTemp: number;
+}
+
+export interface GearItem {
+  id: string;
+  type: 'camera' | 'lens';
+  model: string;
+  brand: string;
 }
 
 export interface UserProfile {
@@ -76,6 +86,7 @@ export interface UserProfile {
   favoriteFilm?: string;
   website?: string;
   settings?: UserSettings;
+  gear: GearItem[];
 }
 
 export interface StockFilm {
