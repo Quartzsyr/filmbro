@@ -28,6 +28,21 @@ export interface DevelopmentRecipe {
   steps: DevelopmentStep[];
 }
 
+/**
+ * 助手函数：清理并验证 Base64 图片数据
+ * 确保返回纯净的 base64 字符串，不含 data:image/xxx;base64, 前缀
+ */
+const prepareImageData = (imageData: string) => {
+  if (!imageData) throw new Error("Image data is empty");
+  if (imageData.includes('base64,')) {
+    return imageData.split('base64,')[1];
+  }
+  return imageData;
+};
+
+/**
+ * 识别胶卷型号
+ */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
   const fallbackData: IdentificationResult = {
     brand: "Kodak",
@@ -37,31 +52,23 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
   };
 
   try {
-    if (!process.env.API_KEY) {
-      console.warn("No API_KEY found. Using mock data.");
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      return fallbackData;
-    }
-
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const modelId = "gemini-3-flash-preview"; 
-    
     const response = await ai.models.generateContent({
-      model: modelId,
+      model: "gemini-3-flash-preview",
+      // 修正：直接传递内容对象而非数组
       contents: {
         parts: [
           {
             inlineData: {
               mimeType: "image/jpeg",
-              data: base64Image.split(',')[1] 
+              data: prepareImageData(base64Image)
             }
           },
-          {
-            text: `Identify this film stock. Return ONLY valid JSON.`
-          }
+          { text: "请识别这张照片中的胶卷品牌、型号名称（如 Gold, Portra, Tri-X）以及 ISO 值。" }
         ]
       },
       config: {
+        systemInstruction: "你是一个专业的胶片摄影专家。你的任务是识别照片中的胶卷包装或底片边缘。请严谨识别，并以 JSON 格式返回 brand, name, iso, type 字段。若无法确定，请返回最可能的估算值。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -71,51 +78,57 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
             iso: { type: Type.INTEGER },
             type: { type: Type.STRING }
           },
-          required: ["brand", "name", "iso"]
+          required: ["brand", "name", "iso", "type"]
         }
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response text");
+    if (!text) throw new Error("Empty response from AI");
     
-    return JSON.parse(text) as IdentificationResult;
-    
+    const result = JSON.parse(text.trim());
+    return { ...fallbackData, ...result };
   } catch (error) {
-    console.error("Gemini Analysis Failed (Using Fallback):", error);
-    return fallbackData; 
+    console.error("AI识别失败，使用默认值:", error);
+    return fallbackData;
   }
 };
 
+/**
+ * AI 验片：分析照片构图与氛围
+ */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  // 处理 Base64 或 Blob URL
-  let base64Data = photoUrl;
-  
-  // 如果是普通 URL 且不是 base64，尝试获取并转换（本地 Base64 不需要此步）
-  if (photoUrl.startsWith('http') && !photoUrl.includes('base64')) {
+  const fallbackData: PhotoAnalysisResult = {
+    composition: "由于网络或格式原因，AI 暂时无法解析构图细节。",
+    mood: "光影间流露出的韵味难以言表。",
+    tags: ["Film", "Photography"],
+    rating: 7.5
+  };
+
+  try {
+    let base64Data = "";
+
+    // 判断是 URL 还是 Base64
+    if (photoUrl.startsWith('data:')) {
+      base64Data = prepareImageData(photoUrl);
+    } else if (photoUrl.startsWith('http')) {
+      // 网络图片需要先 fetch
       try {
-        const blob = await fetch(photoUrl).then(r => r.blob());
-        base64Data = await new Promise((resolve) => {
+        const fetchRes = await fetch(photoUrl);
+        const blob = await fetchRes.blob();
+        const converted = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(blob);
         });
+        base64Data = prepareImageData(converted);
       } catch (e) {
-        console.error("Failed to fetch image", e);
+        console.warn("无法获取远程图片进行分析:", e);
+        return fallbackData;
       }
-  }
-
-  const fallbackData: PhotoAnalysisResult = {
-    composition: "主体清晰，构图平衡，采用了三分法。",
-    mood: "色调温暖，带有一种复古的怀旧感，光影对比柔和。",
-    tags: ["Kodak", "StreetPhotography", "WarmTones", "Vintage", "AnalogVibes"],
-    rating: 8.5
-  };
-
-  try {
-    if (!process.env.API_KEY) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return fallbackData;
+    } else {
+      // 假设是纯 base64
+      base64Data = photoUrl;
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -126,19 +139,14 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
           {
             inlineData: {
               mimeType: "image/jpeg",
-              data: base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
+              data: base64Data
             }
           },
-          {
-            text: `Analyze this film photography photo. Provide a critique in Chinese (中文).
-            1. Describe the composition technique used.
-            2. Describe the mood, lighting, and color palette.
-            3. Suggest 5-8 relevant English hashtags.
-            4. Give a rating out of 10 based on artistic merit.`
-          }
+          { text: "请作为一名摄影评论家，对这张照片进行专业的中文艺术分析。" }
         ]
       },
       config: {
+        systemInstruction: "分析照片的构图(composition)、氛围(mood)，给出英文标签(tags)和 1-10 的艺术评分(rating)。请务必只返回 JSON 格式数据。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -147,50 +155,34 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
             mood: { type: Type.STRING },
             tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             rating: { type: Type.NUMBER }
-          }
+          },
+          required: ["composition", "mood", "tags", "rating"]
         }
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response text");
-    return JSON.parse(text) as PhotoAnalysisResult;
-
+    if (!text) throw new Error("Empty analysis result");
+    
+    const result = JSON.parse(text.trim());
+    return { ...fallbackData, ...result };
   } catch (error) {
-    console.error("Analysis Error:", error);
+    console.error("AI分析失败:", error);
     return fallbackData;
   }
 };
 
+/**
+ * 生成冲洗配方
+ */
 export const getDevelopmentRecipe = async (userPrompt: string): Promise<DevelopmentRecipe | null> => {
   try {
-     if (!process.env.API_KEY) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        return null;
-     }
-
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `You are an expert film development lab technician. 
-      Generate a film development recipe based on this user request: "${userPrompt}".
-      
-      Return a valid JSON object.
-      Schema:
-      {
-        "id": "unique-id",
-        "name": "Short Name",
-        "temp": "20°C",
-        "steps": [
-          {
-            "name": "Step Name",
-            "duration": 300,
-            "color": "tailwind-text-class",
-            "description": "Instruction"
-          }
-        ]
-      }`,
+      contents: { parts: [{ text: userPrompt }] },
       config: {
+        systemInstruction: "你是一位暗房大师。请生成底片冲洗 JSON 配方。duration 为秒数，color 为 Tailwind 颜色类名。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -207,16 +199,20 @@ export const getDevelopmentRecipe = async (userPrompt: string): Promise<Developm
                   duration: { type: Type.INTEGER },
                   color: { type: Type.STRING },
                   description: { type: Type.STRING }
-                }
+                },
+                required: ["name", "duration", "color", "description"]
               }
             }
-          }
+          },
+          required: ["id", "name", "temp", "steps"]
         }
       }
     });
     
-    return JSON.parse(response.text) as DevelopmentRecipe;
+    const text = response.text;
+    return text ? JSON.parse(text.trim()) : null;
   } catch (error) {
+    console.error("生成配方失败:", error);
     return null;
   }
 };
