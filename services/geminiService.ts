@@ -38,12 +38,12 @@ export interface DevelopmentRecipe {
 }
 
 /**
- * 获取 AI 实例，并提供详细的错误排查指导
+ * 在调用时即时获取 Key 并创建实例，防止环境变量在构建后丢失
  */
-const getAIInstance = () => {
+const createAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.error("❌ Gemini API Key 未配置！请在 Vercel 环境变量中添加 VITE_API_KEY。");
+    console.warn("API_KEY_MISSING: API key is not yet selected or injected.");
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
@@ -54,12 +54,12 @@ const prepareImageData = (base64Image: string) => {
   return base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 };
 
-// 使用更稳定的模型别名以防预览版模型不可用
-const DEFAULT_MODEL = 'gemini-2.5-flash-latest';
+// 升级到最新的 Gemini 3 Flash 模型
+const DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: {
@@ -92,7 +92,7 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
 
 export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisResult> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: {
@@ -125,7 +125,7 @@ export const analyzePhoto = async (base64Data: string): Promise<PhotoAnalysisRes
 
 export const analyzeSceneForFilm = async (base64Data: string, stockNames: string[]): Promise<SceneAnalysisResult> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: {
@@ -158,7 +158,7 @@ export const analyzeSceneForFilm = async (base64Data: string, stockNames: string
 
 export const getDailyInsight = async (): Promise<string> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: "为胶片摄影师写一句充满诗意的每日箴言。中文，20字以内。",
@@ -171,7 +171,7 @@ export const getDailyInsight = async (): Promise<string> => {
 
 export const recommendFilm = async (weather: string, stock: StockFilm[]): Promise<string> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const stockSummary = stock.map(s => `${s.brand} ${s.name}`).join(', ');
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
@@ -188,7 +188,7 @@ export const recommendFilm = async (weather: string, stock: StockFilm[]): Promis
 
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: `生成一个针对以下要求的胶片冲洗配方：${prompt}`,
@@ -228,7 +228,7 @@ export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentR
 
 export const analyzeStats = async (summary: string): Promise<string> => {
   try {
-    const ai = getAIInstance();
+    const ai = createAIClient();
     const response = await ai.models.generateContent({
       model: DEFAULT_MODEL,
       contents: `基于以下摄影统计数据给出一段专业的导师建议和分析：${summary}`,

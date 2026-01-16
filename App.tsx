@@ -53,8 +53,12 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
         setIsAnalyzing(true);
         try {
             await onAnalyze(photo.id, photo.url);
-        } catch (e) {
-            alert("AI 分析暂时不可用，请检查网络或环境变量。");
+        } catch (e: any) {
+            if (e.message === 'API_KEY_MISSING') {
+                alert("请先在“我的 -> 高级设置”中配置 API 密钥");
+            } else {
+                alert("AI 分析暂时不可用，请检查密钥权限或网络。");
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -176,8 +180,6 @@ export default function App() {
 
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !activeRoll) return;
-    // Fix: Explicitly cast Array.from(e.target.files) to File[] to prevent 'unknown' type errors
-    // in some TypeScript configurations where the FileList iterator might not be correctly inferred.
     const files = Array.from(e.target.files) as File[];
     setIsUploading(true);
     setUploadProgress(0);
@@ -203,6 +205,20 @@ export default function App() {
     setRolls(prev => prev.map(r => r.id === activeRoll.id ? updatedRoll : r));
     await saveRollToDB(updatedRoll);
     setIsUploading(false);
+  };
+
+  // 密钥选择器处理
+  const handleOpenKeySelector = async () => {
+    // @ts-ignore
+    if (window.aistudio?.openSelectKey) {
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+        // 按照规范，点击后假设成功，重新获取一段话来验证
+        const insight = await getDailyInsight();
+        setDailyInsight(insight);
+    } else {
+        alert("环境不支持官方密钥选择器，请检查环境变量配置。");
+    }
   };
 
   if (currentView === View.SPLASH || isLoading) {
@@ -322,6 +338,22 @@ export default function App() {
                           <div className="text-xl font-black font-mono tabular-nums">{userProfile.gear?.length || 0}</div>
                           <div className="text-[8px] text-muted font-black uppercase tracking-widest mt-1">收藏设备</div>
                       </div>
+                  </div>
+              </section>
+
+              <section className="space-y-6">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">高级 AI 设置</h3>
+                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden p-7 flex items-center justify-between shadow-xl">
+                      <div>
+                          <div className="text-base font-black">API 密钥管理</div>
+                          <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">配置本地私有密钥以激活 AI</div>
+                      </div>
+                      <button 
+                        onClick={handleOpenKeySelector}
+                        className="px-6 py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                      >
+                        配置密钥
+                      </button>
                   </div>
               </section>
 
