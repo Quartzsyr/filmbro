@@ -1,0 +1,37 @@
+
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 底部圆角背景，模拟iOS图标风格 -->
+  <rect width="512" height="512" rx="120" fill="#0A0A0A"/>
+  
+  <!-- 装饰性网格线 (微弱背景) -->
+  <path d="M0 256H512M256 0V512" stroke="white" stroke-width="2" stroke-opacity="0.05"/>
+  
+  <!-- 外圈：镜头边缘 -->
+  <circle cx="256" cy="256" r="180" stroke="#A61727" stroke-width="12" stroke-opacity="0.3"/>
+  <circle cx="256" cy="256" r="160" stroke="#A61727" stroke-width="4" stroke-dasharray="10 20" stroke-opacity="0.5"/>
+
+  <!-- 快门叶片组合 -->
+  <g transform="translate(256, 256)">
+    <!-- 六个叶片 -->
+    <path d="M-80 -138.5L0 -180L80 -138.5V-46.2L0 -4.5L-80 -46.2V-138.5Z" fill="#A61727" fill-opacity="0.1" />
+    
+    <g id="shutter-group">
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(0)"/>
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(60)"/>
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(120)"/>
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(180)"/>
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(240)"/>
+      <path d="M0 -150 L130 -75 L130 0 Z" fill="#A61727" transform="rotate(300)"/>
+    </g>
+  </g>
+
+  <!-- 中心 AI 指示灯 -->
+  <circle cx="256" cy="256" r="45" fill="#0A0A0A" />
+  <circle cx="256" cy="256" r="25" fill="#A61727">
+    <animate attributeName="r" values="22;28;22" dur="3s" repeatCount="indefinite" />
+    <animate attributeName="fill-opacity" values="0.7;1;0.7" dur="3s" repeatCount="indefinite" />
+  </circle>
+  
+  <!-- 镜头高光反射 -->
+  <path d="M340 172C360 192 370 220 370 256" stroke="white" stroke-width="8" stroke-linecap="round" stroke-opacity="0.2"/>
+</svg>
