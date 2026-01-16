@@ -120,6 +120,19 @@ export const getDailyInsight = async (): Promise<string> => {
   }
 };
 
+export const analyzeStats = async (statsSummary: string): Promise<string> => {
+  try {
+    const ai = getAIInstance();
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `这是我的胶片摄影统计数据：${statsSummary}。请根据数据为我写一份专业、优雅的摄影风格洞察报告。包含三个部分：[摄影性格]、[技术偏好]、[进阶挑战]。要求语气像一位经验丰富的导师，中文，200字以内。`
+    });
+    return response.text?.trim() || "你的光影之旅才刚刚开始，继续记录吧。";
+  } catch (e) {
+    return "AI 导师暂时离线，但你的快门从未停歇。";
+  }
+};
+
 export const recommendFilm = async (weather: string, stock: any[]): Promise<string> => {
   const ai = getAIInstance();
   const stockInfo = stock.map(f => `${f.brand} ${f.name} (ISO ${f.iso})`).join(', ');

@@ -381,7 +381,7 @@ export default function App() {
       {currentView === View.FRIDGE && <FilmFridge stock={stock} onUpdateStock={handleUpdateStock} onClose={() => setCurrentView(View.DASHBOARD)} onOpenKeyModal={() => setCurrentView(View.PROFILE)} />}
       {currentView === View.NEGATIVE_INVERTER && <NegativeInverter onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.CHEM_CALC && <ChemistryCalculator onClose={() => setCurrentView(View.DASHBOARD)} />}
-      {currentView === View.STATS && <StatsView rolls={rolls} />}
+      {currentView === View.STATS && <StatsView rolls={rolls} stock={stock} onOpenKeyModal={() => setCurrentView(View.PROFILE)} />}
       {currentView === View.SCANNER && <Scanner onScanComplete={handleScanComplete} onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.LIGHT_METER && <LightMeter onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.DEVELOP_TIMER && <DevelopmentTimer onClose={() => setCurrentView(View.DASHBOARD)} />}
