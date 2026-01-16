@@ -15,7 +15,7 @@ import { NegativeInverter } from './components/NegativeInverter';
 import { ChemistryCalculator } from './components/ChemistryCalculator';
 import { IdentificationResult, analyzePhoto, getApiKey } from './services/geminiService';
 import { resizeImage } from './utils/imageUtils';
-import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB } from './services/dbService';
+import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB, getAllStockFromDB, saveStockToDB } from './services/dbService';
 
 const INITIAL_ROLLS: Roll[] = [
   {
@@ -140,19 +140,28 @@ export default function App() {
   useEffect(() => {
       const initLoad = async () => {
           try {
+              // 加载胶卷
               const savedRolls = await getAllRollsFromDB();
               setRolls(savedRolls.length > 0 ? savedRolls : INITIAL_ROLLS);
+              
+              // 加载个人资料
               const savedProfile = localStorage.getItem('film_archive_profile_v2');
               if (savedProfile) setUserProfile(JSON.parse(savedProfile));
-              const savedStock = localStorage.getItem('film_fridge_stock');
-              if (savedStock) setStock(JSON.parse(savedStock));
-          } catch (e) { console.error(e); } finally { setIsLoading(false); }
+              
+              // 从 IndexedDB 加载冰箱库存
+              const savedStock = await getAllStockFromDB();
+              setStock(savedStock);
+          } catch (e) { 
+              console.error("Initialization failed:", e); 
+          } finally { 
+              setIsLoading(false); 
+          }
       };
       initLoad();
   }, []);
 
+  // 个人资料依然保留在 localStorage（数据量小且非关键）
   useEffect(() => { localStorage.setItem('film_archive_profile_v2', JSON.stringify(userProfile)); }, [userProfile]);
-  useEffect(() => { localStorage.setItem('film_fridge_stock', JSON.stringify(stock)); }, [stock]);
 
   useEffect(() => {
     if (currentView === View.SPLASH) {
@@ -213,6 +222,11 @@ export default function App() {
           await saveRollToDB(updatedRoll);
       }
       setIsExifEditorOpen(false);
+  };
+
+  const handleUpdateStock = async (newStock: StockFilm[]) => {
+      setStock(newStock);
+      await saveStockToDB(newStock);
   };
 
   const handleAnalyzePhotoWrapped = async (photoId: string, url: string) => {
@@ -310,7 +324,7 @@ export default function App() {
           </div>
       )}
 
-      {currentView === View.FRIDGE && <FilmFridge stock={stock} onUpdateStock={setStock} onClose={() => setCurrentView(View.DASHBOARD)} onOpenKeyModal={() => setCurrentView(View.PROFILE)} />}
+      {currentView === View.FRIDGE && <FilmFridge stock={stock} onUpdateStock={handleUpdateStock} onClose={() => setCurrentView(View.DASHBOARD)} onOpenKeyModal={() => setCurrentView(View.PROFILE)} />}
       {currentView === View.NEGATIVE_INVERTER && <NegativeInverter onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.CHEM_CALC && <ChemistryCalculator onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.STATS && <StatsView rolls={rolls} />}
