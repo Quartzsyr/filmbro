@@ -30,22 +30,25 @@ export interface DevelopmentRecipe {
 }
 
 /**
- * 核心：获取当前最有效的 API Key
- * 优先级：localStorage (用户手动设置) > process.env.API_KEY (系统默认)
+ * 获取当前的有效 API Key
+ * 优先级：localStorage (用户手动设置) > process.env.API_KEY (系统/平台注入)
  */
 export const getApiKey = () => {
   const manualKey = localStorage.getItem('GEMINI_API_KEY');
-  const envKey = process.env.API_KEY;
-  return (manualKey && manualKey.trim() !== '') ? manualKey.trim() : (envKey || "");
+  if (manualKey && manualKey.trim() !== '') {
+    return manualKey.trim();
+  }
+  return process.env.API_KEY || "";
 };
 
 /**
- * 助手函数：初始化 AI 实例
+ * 助手函数：初始化 GoogleGenAI 实例
+ * 每次调用都重新初始化以确保使用最新的 API Key
  */
-const createAI = () => {
-    const key = getApiKey();
-    if (!key) throw new Error("API_KEY_MISSING");
-    return new GoogleGenAI({ apiKey: key });
+const getAIInstance = () => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  return new GoogleGenAI({ apiKey });
 };
 
 /**
@@ -57,20 +60,36 @@ const prepareImageData = (base64Image: string) => {
 };
 
 /**
- * AI 识别胶片型号
+ * 根据天气和库存推荐胶卷
+ */
+export const recommendFilm = async (weather: string, stock: any[]): Promise<string> => {
+  const ai = getAIInstance();
+  const stockInfo = stock.map(f => `${f.brand} ${f.name} (ISO ${f.iso})`).join(', ');
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `当前天气：${weather}。我的胶卷库存有：${stockInfo}。请根据天气推荐最适合今天带出门的一款胶卷，并简述原因（中文，50字以内）。`
+  });
+
+  return response.text || "建议带上全能的 ISO 400 胶卷。";
+};
+
+/**
+ * 识别胶片型号
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
-  const ai = createAI();
+  const ai = getAIInstance();
+  
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Image) } },
-        { text: "Identify this film stock. Respond ONLY with JSON format." }
+        { text: "Identify this film stock package. Respond ONLY with JSON format." }
       ]
     },
     config: {
-      systemInstruction: "You are a professional film photography expert. Analyze the film package and return: brand, name, iso (integer), type. Respond only in JSON.",
+      systemInstruction: "You are a professional film photography expert. Analyze the package and return: brand, name, iso (integer), type (Color Negative, B&W, Slide). No markdown, just raw JSON.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -84,14 +103,15 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       }
     }
   });
+
   return JSON.parse(response.text || "{}") as IdentificationResult;
 };
 
 /**
- * AI 分析照片
+ * 分析照片
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  const ai = createAI();
+  const ai = getAIInstance();
   try {
     let base64Data = photoUrl;
     if (photoUrl.startsWith('http')) {
@@ -105,53 +125,43 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Data) } },
-          { text: "Analyze this photo. Respond ONLY with JSON." }
+          { text: "Analyze this photo as a professional curator. Provide constructive feedback in Chinese. Respond ONLY with JSON." }
         ]
       },
       config: {
-        systemInstruction: "Analyze composition, mood, tags, and rating (1-10). Use Chinese for descriptions. JSON only.",
+        systemInstruction: "Analyze composition, mood, tags, and rating (1-10). Use professional photography terminology in Chinese. JSON output only.",
         responseMimeType: "application/json"
       }
     });
+
     return JSON.parse(response.text || "{}") as PhotoAnalysisResult;
   } catch (error) {
+    console.error("AI 分析失败:", error);
     throw error;
   }
 };
 
 /**
- * AI 天气拍摄建议
- */
-export const recommendFilm = async (weather: string, stock: any[]): Promise<string> => {
-  const ai = createAI();
-  const stockInfo = stock.map(f => `${f.brand} ${f.name} (ISO ${f.iso})`).join(', ');
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `当前天气：${weather}。库存：${stockInfo}。推荐一款并说明原因（中文，简短）。`
-  });
-  return response.text || "建议使用 ISO 400 胶卷。";
-};
-
-/**
- * AI 生成冲洗配方
+ * 获取冲洗配方
  */
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
-  const ai = createAI();
+  const ai = getAIInstance();
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Generate development steps for: ${prompt}`,
+      model: 'gemini-3-flash-preview',
+      contents: `Generate professional darkroom development steps for: ${prompt}. Steps should be in Chinese.`,
       config: {
-        systemInstruction: "Expert darkroom technician. Steps in JSON. Chinese descriptions. Tailwind colors.",
+        systemInstruction: "You are an expert darkroom technician. Provide chemical steps in JSON. Colors for steps must be Tailwind text-color classes (e.g., text-red-500). JSON only.",
         responseMimeType: "application/json"
       }
     });
     return JSON.parse(response.text || "null");
   } catch (error) {
+    console.error("Recipe Generation Error:", error);
     return null;
   }
 };

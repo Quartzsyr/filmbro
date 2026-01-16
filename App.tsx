@@ -13,7 +13,7 @@ import { StatsView } from './components/StatsView';
 import { FilmFridge } from './components/FilmFridge';
 import { NegativeInverter } from './components/NegativeInverter';
 import { ChemistryCalculator } from './components/ChemistryCalculator';
-import { IdentificationResult, analyzePhoto } from './services/geminiService';
+import { IdentificationResult, analyzePhoto, getApiKey } from './services/geminiService';
 import { resizeImage } from './utils/imageUtils';
 import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB } from './services/dbService';
 
@@ -61,14 +61,13 @@ const Lightbox = ({ photo, onClose, onAnalyze, onGoToProfile }: {
         setIsAnalyzing(true);
         try {
             await onAnalyze(photo.id, photo.url);
-            setIsPanelOpen(true);
         } catch (e: any) {
             if (e.message === "API_KEY_MISSING") {
-                if (confirm("需要配置 API Key 才能使用 AI 分析。是否现在前往“我的”界面配置？")) {
+                if (confirm("需要配置 API Key 才能使用 AI 验片。是否现在前往“我的”界面配置？")) {
                     onGoToProfile();
                 }
             } else {
-                alert("分析失败，请稍后重试。");
+                alert("AI 分析失败，请检查网络或 API Key 状态。");
             }
         } finally {
             setIsAnalyzing(false);
@@ -85,27 +84,34 @@ const Lightbox = ({ photo, onClose, onAnalyze, onGoToProfile }: {
                      <button 
                         onClick={handleAnalyze}
                         disabled={isAnalyzing}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${photo.analysis ? 'bg-primary/20 border-primary text-primary-hover' : 'bg-white/10 border-white/20 text-white'}`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all active:scale-95 ${photo.analysis ? 'bg-primary/20 border-primary text-primary-hover' : 'bg-white/10 border-white/20 text-white hover:bg-white/20'}`}
                      >
                         <span className={`material-symbols-outlined text-[18px] ${isAnalyzing ? 'animate-spin' : ''}`}>{isAnalyzing ? 'sync' : (photo.analysis ? 'check_circle' : 'auto_awesome')}</span>
                         <span className="text-xs font-bold uppercase tracking-wider">{isAnalyzing ? 'AI 分析中...' : (photo.analysis ? 'AI 分析完成' : 'AI 验片')}</span>
                      </button>
                 </div>
             </div>
+
             <div className="flex-1 flex items-center justify-center p-4">
                 <img src={photo.url} className="max-w-full max-h-full object-contain shadow-2xl rounded-sm" />
             </div>
+
             <div className={`fixed inset-x-0 bottom-0 md:static md:w-96 bg-[#111] border-t md:border-t-0 md:border-l border-white/10 transform transition-transform duration-300 ease-out z-30 flex flex-col pb-[env(safe-area-inset-bottom)] ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}`}>
                 <div className="p-6 h-full overflow-y-auto space-y-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2"><span className="material-symbols-outlined text-primary">analytics</span>验片报告</h3>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary">analytics</span>
+                        验片报告
+                    </h3>
                     {photo.analysis ? (
                         <div className="space-y-6 animate-fade-in">
-                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">综合评分</label><div className="text-2xl font-black text-primary">{photo.analysis.rating}/10</div></div>
-                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">氛围分析</label><p className="text-sm text-white/90 leading-relaxed">{photo.analysis.mood}</p></div>
-                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">构图建议</label><p className="text-sm text-white/90 leading-relaxed">{photo.analysis.composition}</p></div>
+                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">评分</label><div className="text-2xl font-black text-primary">{photo.analysis.rating}/10</div></div>
+                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">影调</label><p className="text-sm text-white/90 leading-relaxed font-light">{photo.analysis.mood}</p></div>
+                             <div className="space-y-1"><label className="text-[10px] uppercase text-muted">构图</label><p className="text-sm text-white/90 leading-relaxed font-light">{photo.analysis.composition}</p></div>
                              <div className="flex flex-wrap gap-2 pt-2">{photo.analysis.tags.map(tag => (<span key={tag} className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-1 rounded font-mono">#{tag}</span>))}</div>
                         </div>
-                    ) : <div className="py-20 text-center text-xs text-muted uppercase tracking-widest">点击上方按钮开启 AI 验片</div>}
+                    ) : (
+                        <div className="py-20 text-center text-xs text-muted uppercase tracking-widest">点击上方按钮开启 AI 分析</div>
+                    )}
                 </div>
             </div>
         </div>
@@ -117,13 +123,14 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [stock, setStock] = useState<StockFilm[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
+
   const [activeRollId, setActiveRollId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
-  const [isExifModalOpen, setIsExifModalOpen] = useState(false);
   const [isAddRollModalOpen, setIsAddRollModalOpen] = useState(false);
   const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400', camera: '' });
   const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
@@ -160,7 +167,7 @@ export default function App() {
   };
 
   const handleScanComplete = async (result: IdentificationResult, captureImage: string) => {
-    const newRoll: Roll = { id: Date.now().toString(), brand: result.brand || '未知品牌', name: result.name || '识别胶卷', iso: result.iso || 400, camera: userProfile.favoriteCamera || '未知相机', date: new Date().toISOString().split('T')[0], status: RollStatus.ACTIVE, coverImage: captureImage, photos: [], framesTaken: 0, totalFrames: 36 };
+    const newRoll: Roll = { id: Date.now().toString(), brand: result.brand || '未知', name: result.name || '识别中', iso: result.iso || 400, camera: userProfile.favoriteCamera || '未知相机', date: new Date().toISOString().split('T')[0], status: RollStatus.ACTIVE, coverImage: captureImage, photos: [], framesTaken: 0, totalFrames: 36 };
     setRolls([newRoll, ...rolls]);
     await saveRollToDB(newRoll);
     setActiveRollId(newRoll.id);
@@ -197,7 +204,7 @@ export default function App() {
       setIsUploading(false);
   };
 
-  const handleAnalyzePhoto = async (photoId: string, url: string) => {
+  const handleAnalyzePhotoWrapped = async (photoId: string, url: string) => {
       const result = await analyzePhoto(url);
       const roll = rolls.find(r => r.id === activeRollId);
       if (roll) {
@@ -218,22 +225,23 @@ export default function App() {
       {isUploading && (
           <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-fade-in">
               <div className="size-20 border-4 border-white/5 border-t-primary rounded-full animate-spin mb-6"></div>
-              <h3 className="text-xl font-bold uppercase tracking-widest">处理中 {uploadProgress}%</h3>
+              <h3 className="text-xl font-bold uppercase tracking-widest text-white">正在处理照片</h3>
+              <p className="text-sm text-muted mt-2">{uploadProgress}%</p>
           </div>
       )}
 
       {currentView === View.DASHBOARD && (
         <div className="p-6 pt-[calc(env(safe-area-inset-top)+3rem)] space-y-10 animate-fade-in max-w-2xl mx-auto">
             <header className="flex justify-between items-end">
-                <div><span className="text-[10px] text-primary font-bold uppercase tracking-widest">Darkroom</span><h2 className="text-4xl font-display font-black tracking-tight mt-1">控制台</h2></div>
+                <div><span className="text-[10px] text-primary font-bold uppercase tracking-widest">Dashboard</span><h2 className="text-4xl font-display font-black tracking-tight mt-1">控制台</h2></div>
                 <button onClick={() => setCurrentView(View.PROFILE)} className="size-12 rounded-full border-2 border-white/5 overflow-hidden active:scale-95 transition-transform"><img src={userProfile.avatar} className="w-full h-full object-cover" /></button>
             </header>
             <div className="grid grid-cols-2 gap-4">
-                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer">已拍胶卷<div className="text-3xl font-display font-black mt-1">{rolls.length}</div></div>
-                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer">胶片冰箱<div className="text-3xl font-display font-black mt-1">{stock.reduce((a, b) => a + b.count, 0)}</div></div>
+                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/5 transition-colors">已拍胶卷<div className="text-3xl font-display font-black mt-1">{rolls.length}</div></div>
+                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/5 transition-colors">胶片冰箱<div className="text-3xl font-display font-black mt-1">{stock.reduce((a, b) => a + b.count, 0)}</div></div>
             </div>
             <section className="space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-muted">快速功能</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted">实验室工具</h3>
                 <div className="grid grid-cols-2 gap-3">
                     <button onClick={() => setCurrentView(View.DEVELOP_TIMER)} className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl"><span className="material-symbols-outlined text-primary">timer</span>暗房定时</button>
                     <button onClick={() => setCurrentView(View.LIGHT_METER)} className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl"><span className="material-symbols-outlined text-muted">exposure</span>测光表</button>
@@ -246,7 +254,7 @@ export default function App() {
 
       {currentView === View.LIBRARY && (
           <div className="p-6 pt-[calc(env(safe-area-inset-top)+3rem)] animate-fade-in max-w-4xl mx-auto pb-32">
-             <header className="flex justify-between items-end mb-8"><div><span className="text-[10px] text-primary font-bold uppercase tracking-widest">Archive</span><h2 className="text-4xl font-display font-black tracking-tight mt-1">胶片库</h2></div><button onClick={() => setIsAddRollModalOpen(true)} className="size-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center"><span className="material-symbols-outlined">add</span></button></header>
+             <header className="flex justify-between items-end mb-8"><div><span className="text-[10px] text-primary font-bold uppercase tracking-widest">Archive</span><h2 className="text-4xl font-display font-black tracking-tight mt-1">图库</h2></div><button onClick={() => setIsAddRollModalOpen(true)} className="size-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center"><span className="material-symbols-outlined">add</span></button></header>
              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 {rolls.map(roll => (
                     <div key={roll.id} onClick={() => { setActiveRollId(roll.id); setCurrentView(View.ROLL_DETAIL); }} className="relative aspect-[4/5] rounded-xl overflow-hidden border border-white/10 group cursor-pointer"><img src={roll.coverImage} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div><div className="absolute bottom-4 left-4 right-4"><div className="text-[8px] font-mono text-primary font-bold uppercase">{roll.brand}</div><div className="text-sm font-display font-black uppercase mt-0.5">{roll.name}</div></div></div>
@@ -264,7 +272,7 @@ export default function App() {
                   <div className="absolute bottom-8 left-6 right-6"><span className="text-xs text-primary font-bold uppercase">{activeRoll.brand}</span><h2 className="text-5xl font-display font-black uppercase mt-1 leading-none">{activeRoll.name}</h2></div>
               </div>
               <div className="p-6 space-y-8">
-                  <div className="flex gap-2"><button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">数字印样</button><button onClick={() => setIsExifModalOpen(true)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">批量参数</button></div>
+                  <div className="flex gap-2"><button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">数字印样</button></div>
                   <div className="grid grid-cols-3 gap-2">
                       <label className="aspect-square rounded border border-white/10 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/5"><span className="material-symbols-outlined text-primary">add_a_photo</span><span className="text-[10px] font-bold uppercase">上传</span><input type="file" multiple accept="image/*" className="hidden" onChange={handleAddPhotos} /></label>
                       {activeRoll.photos.map(photo => (<div key={photo.id} onClick={() => setSelectedPhotoId(photo.id)} className="relative aspect-square rounded overflow-hidden border border-white/5 cursor-pointer"><img src={photo.url} className="w-full h-full object-cover" />{photo.analysis && <div className="absolute top-1.5 right-1.5 size-3 bg-primary rounded-full shadow-lg"></div>}</div>))}
@@ -280,8 +288,9 @@ export default function App() {
               <section className="bg-surface-dark border border-white/5 p-6 rounded-3xl space-y-4">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2"><span className="material-symbols-outlined text-sm">vpn_key</span>AI 引擎配置</h3>
                   <div className="space-y-3">
-                      <input type="password" value={manualApiKey} onChange={(e) => { setManualApiKey(e.target.value); setIsKeySaved(false); }} placeholder="粘贴您的 Gemini API Key" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary focus:outline-none transition-colors" />
-                      <button onClick={saveManualApiKey} className={`w-full py-3 rounded-xl font-bold text-[10px] uppercase transition-all ${isKeySaved ? 'bg-green-600 text-white' : 'bg-primary text-white active:scale-95'}`}>{isKeySaved ? '已保存成功' : '保存 API Key'}</button>
+                      <p className="text-[11px] text-muted italic">手动输入以获得最佳稳定性，尤其是在 Vercel 部署环境下。</p>
+                      <input type="password" value={manualApiKey} onChange={(e) => { setManualApiKey(e.target.value); setIsKeySaved(false); }} placeholder="在此粘贴 Gemini API Key" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:border-primary focus:outline-none transition-colors" />
+                      <button onClick={saveManualApiKey} className={`w-full py-3 rounded-xl font-bold text-[10px] uppercase transition-all ${isKeySaved ? 'bg-green-600 text-white' : 'bg-primary text-white active:scale-95'}`}>{isKeySaved ? '已保存成功' : '应用 API Key'}</button>
                   </div>
               </section>
           </div>
@@ -295,17 +304,25 @@ export default function App() {
       {currentView === View.LIGHT_METER && <LightMeter onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.DEVELOP_TIMER && <DevelopmentTimer onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.CONTACT_SHEET && activeRoll && <ContactSheet roll={activeRoll} onClose={() => setCurrentView(View.ROLL_DETAIL)} />}
-      {selectedPhotoId && activeRoll && <Lightbox photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} onClose={() => setSelectedPhotoId(null)} onAnalyze={handleAnalyzePhoto} onGoToProfile={() => { setSelectedPhotoId(null); setCurrentView(View.PROFILE); }} />}
+      
+      {selectedPhotoId && activeRoll && (
+          <Lightbox 
+            photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} 
+            onClose={() => setSelectedPhotoId(null)} 
+            onAnalyze={handleAnalyzePhotoWrapped} 
+            onGoToProfile={() => { setSelectedPhotoId(null); setCurrentView(View.PROFILE); }} 
+          />
+      )}
 
       {isAddRollModalOpen && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm shadow-2xl">
                <div className="w-full max-w-sm bg-[#111] border border-white/10 rounded-[2.5rem] p-8 space-y-6">
-                    <h3 className="text-xl font-black uppercase text-primary">添加胶卷</h3>
+                    <h3 className="text-xl font-black uppercase text-primary">录入胶卷</h3>
                     <div className="space-y-4">
-                        <input type="text" placeholder="品牌 (Kodak)" value={newRollData.brand} onChange={(e) => setNewRollData({...newRollData, brand: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none" />
-                        <input type="text" placeholder="型号 (Gold 200)" value={newRollData.name} onChange={(e) => setNewRollData({...newRollData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none" />
+                        <input type="text" placeholder="品牌 (e.g. Fuji)" value={newRollData.brand} onChange={(e) => setNewRollData({...newRollData, brand: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none" />
+                        <input type="text" placeholder="型号 (e.g. C200)" value={newRollData.name} onChange={(e) => setNewRollData({...newRollData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm focus:border-primary outline-none" />
                     </div>
-                    <button onClick={handleManualAddRoll} className="w-full py-4 bg-primary text-white font-bold rounded-2xl uppercase text-xs active:scale-95">创建胶卷</button>
+                    <button onClick={handleManualAddRoll} className="w-full py-4 bg-primary text-white font-bold rounded-2xl uppercase text-xs active:scale-95">确认</button>
                     <button onClick={() => setIsAddRollModalOpen(false)} className="w-full text-[10px] text-muted uppercase">取消</button>
                </div>
           </div>

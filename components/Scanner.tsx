@@ -22,43 +22,46 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanComplete, onClose }) => 
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [hasValidKey, setHasValidKey] = useState(false);
-  const [showConfigHint, setShowConfigHint] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [keySelected, setKeySelected] = useState<boolean>(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   useEffect(() => {
-    checkKeyStatus();
+    checkApiKey();
     startCamera();
     return () => stopCamera();
   }, []);
 
-  const checkKeyStatus = async () => {
-    // 优先检查本地手动配置的 Key
-    const localKey = getApiKey();
-    if (localKey) {
-      setHasValidKey(true);
+  const checkApiKey = async () => {
+    // 1. 检查手动配置
+    const manualKey = localStorage.getItem('GEMINI_API_KEY');
+    if (manualKey && manualKey.trim() !== '') {
+      setKeySelected(true);
       return;
     }
 
-    // 其次检查平台自动注入的 Key 状态
+    // 2. 检查平台 Key
     if (window.aistudio) {
-      const platformKey = await window.aistudio.hasSelectedApiKey();
-      setHasValidKey(platformKey);
-      if (!platformKey) setShowConfigHint(true);
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      setKeySelected(hasKey);
+      if (!hasKey) setShowConfig(true);
+    } else if (process.env.API_KEY) {
+      setKeySelected(true);
     } else {
-      setShowConfigHint(true);
+      setShowConfig(true);
     }
   };
 
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+      const constraints = { 
         video: { facingMode: 'environment', width: { ideal: 1280 } } 
-      });
+      };
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
       if (videoRef.current) videoRef.current.srcObject = mediaStream;
     } catch (err) {
-      setErrorMessage("无法访问摄像头");
+      setErrorCode("CAMERA_DENIED");
     }
   };
 
@@ -66,34 +69,54 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanComplete, onClose }) => 
     if (stream) stream.getTracks().forEach(track => track.stop());
   };
 
+  const handleOpenKeySelector = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setKeySelected(true);
+      setShowConfig(false);
+      setErrorCode(null);
+    } else {
+      // 引导用户去 Profile 设置
+      alert("请前往“我的”界面手动输入 API Key");
+    }
+  };
+
   const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current || isAnalyzing) return;
     
-    // 如果没有 Key，提示去配置
-    if (!hasValidKey) {
-      setShowConfigHint(true);
+    if (!keySelected && !getApiKey()) {
+      setShowConfig(true);
       return;
     }
 
     setIsAnalyzing(true);
-    setErrorMessage(null);
+    setErrorCode(null);
     
     const context = canvasRef.current.getContext('2d');
     if (context) {
-      canvasRef.current.width = 640;
-      canvasRef.current.height = (videoRef.current.videoHeight / videoRef.current.videoWidth) * 640;
-      context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      const TARGET_WIDTH = 640;
+      const scale = TARGET_WIDTH / videoRef.current.videoWidth;
+      const targetHeight = videoRef.current.videoHeight * scale;
+
+      canvasRef.current.width = TARGET_WIDTH;
+      canvasRef.current.height = targetHeight;
+      context.drawImage(videoRef.current, 0, 0, TARGET_WIDTH, targetHeight);
+      
       const imageData = canvasRef.current.toDataURL('image/jpeg', 0.6);
       
       try {
         const result = await identifyFilmStock(imageData);
         onScanComplete(result, imageData);
       } catch (error: any) {
-        if (error.message === "API_KEY_MISSING") {
-          setHasValidKey(false);
-          setShowConfigHint(true);
+        console.error("Scanner AI Error:", error);
+        const errorMsg = error.message || "";
+        
+        if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API_KEY") || errorMsg.includes("API_KEY_MISSING")) {
+          setKeySelected(false);
+          setShowConfig(true);
+          setErrorCode("KEY_ERROR");
         } else {
-          setErrorMessage("识别失败，请确保拍摄清晰");
+          setErrorCode("ANALYSIS_FAILED");
         }
         setIsAnalyzing(false);
       }
@@ -104,72 +127,53 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanComplete, onClose }) => 
     <div className="fixed inset-0 z-[60] bg-black flex flex-col items-center justify-between overflow-hidden font-mono">
       <canvas ref={canvasRef} className="hidden" />
       
-      {/* Viewfinder */}
+      {/* 取景器 */}
       <div className="absolute inset-0 z-0">
         <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover opacity-60" />
-        <div className="absolute inset-0 pointer-events-none p-6 py-16 flex flex-col justify-between">
+        <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6 py-16">
             <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/10">
-                    <div className={`size-2 rounded-full ${hasValidKey ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,1)]' : 'bg-red-500 animate-pulse'}`}></div>
-                    <span className="text-[10px] text-white/70 uppercase tracking-widest">{hasValidKey ? 'AI Ready' : 'API Key Required'}</span>
+                    <div className={`size-2 rounded-full ${keySelected || getApiKey() ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+                    <span className="text-[10px] text-white/70 uppercase tracking-widest">{keySelected || getApiKey() ? 'AI Ready' : 'Key Required'}</span>
                 </div>
             </div>
             
             <div className="relative w-full max-w-sm aspect-square mx-auto border border-white/10 rounded-3xl flex items-center justify-center overflow-hidden">
-                <div className={`absolute inset-0 bg-primary/5 ${isAnalyzing ? 'animate-pulse' : ''}`}></div>
-                <div className={`absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_15px_rgba(166,23,39,1)] transition-all duration-1000 ${isAnalyzing ? 'animate-[scan_1.5s_linear_infinite]' : 'top-1/2'}`}></div>
-            </div>
-
-            <div className="text-center">
-                {errorMessage && <div className="text-red-500 text-[10px] font-bold bg-red-500/10 py-1 px-4 rounded-full border border-red-500/20 inline-block">{errorMessage}</div>}
+                <div className={`absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_15px_rgba(166,23,39,1)] ${isAnalyzing ? 'animate-[scan_1.5s_linear_infinite]' : 'top-1/2'}`}></div>
             </div>
         </div>
       </div>
 
-      {/* Header */}
+      {/* 顶部按钮 */}
       <div className="relative z-30 w-full flex items-center justify-between p-6 pt-[calc(env(safe-area-inset-top)+1rem)]">
         <button onClick={onClose} className="size-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10"><span className="material-symbols-outlined">close</span></button>
       </div>
 
-      {/* API Key Hint Overlay */}
-      {showConfigHint && (
-          <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 z-50 bg-[#0c0c0c]/95 backdrop-blur-xl border border-primary/30 p-8 rounded-[2.5rem] text-center animate-fade-in shadow-2xl">
+      {/* 密钥配置引导 */}
+      {showConfig && (
+          <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 z-50 bg-[#0c0c0c]/95 backdrop-blur-xl border border-primary/30 p-8 rounded-3xl text-center animate-fade-in shadow-2xl">
               <span className="material-symbols-outlined text-primary text-5xl mb-4">vpn_key</span>
-              <h3 className="text-xl font-black uppercase text-white mb-2">需要 AI 密钥</h3>
+              <h3 className="text-xl font-black uppercase tracking-tight text-white mb-2">需要 AI 密钥</h3>
               <p className="text-xs text-white/50 leading-relaxed mb-8">
-                  请前往“我的”界面配置 Gemini API Key，或在此点击按钮从平台选择。
+                该功能需要 Gemini API Key 支持。请前往“我的”界面手动设置，或点击下方按钮。
               </p>
-              <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={async () => {
-                        if (window.aistudio) {
-                            await window.aistudio.openSelectKey();
-                            setHasValidKey(true);
-                            setShowConfigHint(false);
-                        }
-                    }}
-                    className="w-full py-4 bg-primary text-white font-bold rounded-2xl uppercase text-xs"
-                  >
-                    平台选择 Key
-                  </button>
-                  <button 
-                    onClick={onClose}
-                    className="w-full py-4 bg-white/5 text-white/50 font-bold rounded-2xl uppercase text-xs"
-                  >
-                    前往“我的”手动输入
-                  </button>
-              </div>
+              <button 
+                onClick={handleOpenKeySelector}
+                className="w-full py-4 bg-primary text-white font-bold rounded-2xl uppercase text-xs shadow-lg active:scale-95 transition-all"
+              >
+                立即配置
+              </button>
           </div>
       )}
 
-      {/* Footer */}
-      <div className="relative z-30 w-full p-8 pb-[calc(env(safe-area-inset-bottom)+2rem)] flex justify-center items-center bg-gradient-to-t from-black to-transparent">
+      {/* 底部快门 */}
+      <div className="relative z-30 w-full p-8 pb-[calc(env(safe-area-inset-bottom)+2rem)] flex flex-col items-center gap-6 bg-gradient-to-t from-black to-transparent">
         <button 
           onClick={captureAndAnalyze}
           disabled={isAnalyzing}
-          className="size-24 rounded-full bg-primary p-1 shadow-[0_0_30px_rgba(166,23,39,0.4)] active:scale-90 transition-transform disabled:opacity-50"
+          className="size-24 rounded-full bg-primary p-1 border-4 border-white/10 active:scale-95 transition-all disabled:opacity-50"
         >
-          <div className="size-full rounded-full border-4 border-white/20 flex items-center justify-center">
+          <div className="size-full rounded-full flex items-center justify-center">
              <span className={`material-symbols-outlined text-white text-5xl ${isAnalyzing ? 'animate-spin' : ''}`}>
                 {isAnalyzing ? 'sync' : 'camera'}
              </span>
@@ -177,7 +181,9 @@ export const Scanner: React.FC<ScannerProps> = ({ onScanComplete, onClose }) => 
         </button>
       </div>
 
-      <style>{` @keyframes scan { 0% { top: 0; } 100% { top: 100%; } } `}</style>
+      <style>{`
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+      `}</style>
     </div>
   );
 };
