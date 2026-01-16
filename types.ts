@@ -61,14 +61,21 @@ export interface Roll {
   defaultExif?: ExifData; // Batch defaults
 }
 
+export interface UserSettings {
+  tempUnit: 'C' | 'F';
+  oledMode: boolean;
+  autoAnalyze: boolean;
+}
+
 export interface UserProfile {
   name: string;
-  role: string; // e.g., "Archivist since 2021"
+  role: string;
   avatar: string;
   bio?: string;
   favoriteCamera?: string;
   favoriteFilm?: string;
   website?: string;
+  settings?: UserSettings;
 }
 
 export interface StockFilm {
