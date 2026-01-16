@@ -14,7 +14,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentView, onChangeVie
     `material-symbols-outlined text-[26px] ${filled ? 'font-variation-settings-"FILL"1' : 'font-light'}`;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#0f0f0f]/90 backdrop-blur-xl border-t border-white/5 px-6 py-4 pb-6 flex justify-between items-end z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-[#0f0f0f]/90 backdrop-blur-xl border-t border-white/5 px-6 pt-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] flex justify-between items-end z-50">
       
       {/* Home / Dashboard */}
       <button 

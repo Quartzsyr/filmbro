@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { View, Roll, RollStatus, ExifData, FilmPhoto, PhotoAnalysis, UserProfile } from './types';
+import { View, Roll, RollStatus, FilmPhoto, UserProfile } from './types';
 import { Navigation } from './components/Navigation';
 import { Scanner } from './components/Scanner';
 import { BatchExifEditor } from './components/BatchExifEditor';
@@ -12,6 +11,7 @@ import { LightMeter } from './components/LightMeter';
 import { StatsView } from './components/StatsView';
 import { IdentificationResult, analyzePhoto } from './services/geminiService';
 import { resizeImage } from './utils/imageUtils';
+import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB } from './services/dbService';
 
 const INITIAL_ROLLS: Roll[] = [
   {
@@ -45,29 +45,21 @@ const INITIAL_PROFILE: UserProfile = {
     website: 'darkroom.ai'
 };
 
-const FILTERS = [
-    { id: 'normal', name: '原片', style: {} },
-    { id: 'bw-contrast', name: '黑白高反差', style: { filter: 'grayscale(100%) contrast(120%) brightness(95%)' } },
-    { id: 'vintage-warm', name: '复古暖调', style: { filter: 'sepia(30%) saturate(140%) contrast(90%) hue-rotate(-10deg)' } },
-    { id: 'cinematic', name: '电影感', style: { filter: 'contrast(110%) saturate(80%) brightness(90%) hue-rotate(185deg) sepia(20%)' } },
-];
-
 const Lightbox = ({ photo, onClose, onAnalyze }: { 
     photo: FilmPhoto, 
     onClose: () => void,
     onAnalyze: (photoId: string, url: string) => void
 }) => {
     const [isPanelOpen, setIsPanelOpen] = useState(false);
-    const activeFilter = FILTERS[0];
 
     useEffect(() => {
         if (photo.analysis) setIsPanelOpen(true);
     }, [photo]);
 
     return (
-        <div className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-xl flex flex-col md:flex-row animate-fade-in">
-            <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-                <button onClick={onClose} className="text-white/80 hover:text-white bg-black/40 p-2 rounded-full backdrop-blur pointer-events-auto">
+        <div className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-xl flex flex-col md:flex-row animate-fade-in pt-[env(safe-area-inset-top)]">
+            <div className="absolute top-0 left-0 right-0 p-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex justify-between items-center z-20 pointer-events-none">
+                <button onClick={onClose} className="text-white/80 hover:text-white bg-black/40 p-2 rounded-full backdrop-blur pointer-events-auto active:scale-90 transition-transform">
                     <span className="material-symbols-outlined">close</span>
                 </button>
                 <div className="flex gap-4 pointer-events-auto">
@@ -94,13 +86,12 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
                 <div className="relative flex-1 w-full flex items-center justify-center p-4 md:p-12">
                     <img 
                         src={photo.url} 
-                        className="max-w-full max-h-full object-contain shadow-2xl rounded-sm transition-all duration-300 ease-out" 
-                        style={{ boxShadow: '0 0 50px rgba(0,0,0,0.8)', ...activeFilter.style }}
+                        className="max-w-full max-h-full object-contain shadow-2xl rounded-sm" 
                     />
                 </div>
             </div>
 
-            <div className={`fixed inset-x-0 bottom-0 md:static md:w-96 bg-[#111] border-t md:border-t-0 md:border-l border-white/10 transform transition-transform duration-300 ease-out z-30 flex flex-col ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}`}>
+            <div className={`fixed inset-x-0 bottom-0 md:static md:w-96 bg-[#111] border-t md:border-t-0 md:border-l border-white/10 transform transition-transform duration-300 ease-out z-30 flex flex-col pb-[env(safe-area-inset-bottom)] ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}`}>
                 <div className="p-6 h-full overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -146,18 +137,12 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>(View.SPLASH);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
-  const [rolls, setRolls] = useState<Roll[]>(() => {
-      const saved = localStorage.getItem('film_archive_rolls_v2');
-      return saved ? JSON.parse(saved) : INITIAL_ROLLS;
-  });
-
-  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
-      const saved = localStorage.getItem('film_archive_profile_v2');
-      return saved ? JSON.parse(saved) : INITIAL_PROFILE;
-  });
+  const [rolls, setRolls] = useState<Roll[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
 
   const [activeRollId, setActiveRollId] = useState<string | null>(null);
   const [isExifModalOpen, setIsExifModalOpen] = useState(false);
@@ -168,15 +153,25 @@ export default function App() {
   const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400', camera: '' });
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
 
+  // 初始化从 IndexedDB 加载
   useEffect(() => {
-      try {
-          localStorage.setItem('film_archive_rolls_v2', JSON.stringify(rolls));
-      } catch (e) {
-          console.error("Storage full!", e);
-          alert("存储已满！请删除一些胶卷后再添加。");
-      }
-  }, [rolls]);
+      const initLoad = async () => {
+          try {
+              const savedRolls = await getAllRollsFromDB();
+              setRolls(savedRolls.length > 0 ? savedRolls : INITIAL_ROLLS);
+              
+              const savedProfile = localStorage.getItem('film_archive_profile_v2');
+              if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+          } catch (e) {
+              console.error("Failed to load from DB", e);
+          } finally {
+              setIsLoading(false);
+          }
+      };
+      initLoad();
+  }, []);
 
+  // 监听并同步个人资料到 localStorage
   useEffect(() => {
       localStorage.setItem('film_archive_profile_v2', JSON.stringify(userProfile));
   }, [userProfile]);
@@ -188,7 +183,7 @@ export default function App() {
     }
   }, [currentView]);
 
-  const handleScanComplete = (result: IdentificationResult, captureImage: string) => {
+  const handleScanComplete = async (result: IdentificationResult, captureImage: string) => {
     const newRoll: Roll = {
       id: Date.now().toString(),
       brand: result.brand || '未知品牌',
@@ -202,12 +197,14 @@ export default function App() {
       framesTaken: 0,
       totalFrames: 36
     };
-    setRolls([newRoll, ...rolls]);
+    const updatedRolls = [newRoll, ...rolls];
+    setRolls(updatedRolls);
+    await saveRollToDB(newRoll);
     setActiveRollId(newRoll.id);
     setCurrentView(View.ROLL_DETAIL);
   };
 
-  const handleManualAddRoll = () => {
+  const handleManualAddRoll = async () => {
       if(!newRollData.brand || !newRollData.name) { alert('请填写品牌和名称'); return; }
       const newRoll: Roll = {
         id: Date.now().toString(),
@@ -223,12 +220,14 @@ export default function App() {
         totalFrames: 36
       };
       setRolls([newRoll, ...rolls]);
+      await saveRollToDB(newRoll);
       setIsAddRollModalOpen(false);
       setNewRollData({ brand: '', name: '', iso: '400', camera: '' });
   };
 
-  const handleDeleteRoll = () => {
+  const handleDeleteRoll = async () => {
       if (activeRollId) {
+          await deleteRollFromDB(activeRollId);
           setRolls(rolls.filter(r => r.id !== activeRollId));
           setActiveRollId(null);
           setCurrentView(View.LIBRARY);
@@ -238,15 +237,15 @@ export default function App() {
 
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || !activeRollId) return;
-      const files = Array.from(e.target.files);
+      // Fixed: Casting result of Array.from to File[] to resolve unknown type error
+      const files = Array.from(e.target.files) as File[];
       setIsUploading(true);
       setUploadProgress(0);
       
       const newPhotos: FilmPhoto[] = [];
-      
       for (let i = 0; i < files.length; i++) {
           try {
-              const base64 = await resizeImage(files[i], 1600, 0.6); // Resize to save space and prevent freeze
+              const base64 = await resizeImage(files[i], 1600, 0.7); 
               newPhotos.push({
                   id: Math.random().toString(36).substr(2, 9),
                   url: base64,
@@ -257,37 +256,47 @@ export default function App() {
           }
       }
 
-      setRolls(prev => prev.map(r => {
-          if (r.id === activeRollId) {
-              const updatedPhotos = [...r.photos, ...newPhotos];
-              return { 
-                  ...r, 
-                  photos: updatedPhotos, 
-                  framesTaken: updatedPhotos.length,
-                  coverImage: r.photos.length === 0 ? newPhotos[0].url : r.coverImage
-              };
-          }
-          return r;
-      }));
+      const rollToUpdate = rolls.find(r => r.id === activeRollId);
+      if (rollToUpdate) {
+          const updatedPhotos = [...rollToUpdate.photos, ...newPhotos];
+          const updatedRoll = { 
+              ...rollToUpdate, 
+              photos: updatedPhotos, 
+              framesTaken: updatedPhotos.length,
+              coverImage: rollToUpdate.photos.length === 0 ? newPhotos[0].url : rollToUpdate.coverImage
+          };
+          setRolls(prev => prev.map(r => r.id === activeRollId ? updatedRoll : r));
+          await saveRollToDB(updatedRoll);
+      }
       setIsUploading(false);
   };
 
   const handleAnalyzePhoto = async (photoId: string, url: string) => {
       const result = await analyzePhoto(url);
-      setRolls(prev => prev.map(r => {
-          if (r.id === activeRollId) {
-              return {
-                  ...r,
-                  photos: r.photos.map(p => p.id === photoId ? { ...p, analysis: result } : p)
-              };
-          }
-          return r;
-      }));
+      const rollToUpdate = rolls.find(r => r.id === activeRollId);
+      if (rollToUpdate) {
+          const updatedRoll = {
+              ...rollToUpdate,
+              photos: rollToUpdate.photos.map(p => p.id === photoId ? { ...p, analysis: result } : p)
+          };
+          setRolls(prev => prev.map(r => r.id === activeRollId ? updatedRoll : r));
+          await saveRollToDB(updatedRoll);
+      }
+  };
+
+  const handleSaveExif = async (data: any) => {
+      const rollToUpdate = rolls.find(r => r.id === activeRollId);
+      if (rollToUpdate) {
+          const updatedRoll = { ...rollToUpdate, defaultExif: data };
+          setRolls(prev => prev.map(r => r.id === activeRollId ? updatedRoll : r));
+          await saveRollToDB(updatedRoll);
+          setIsExifModalOpen(false);
+      }
   };
 
   const activeRoll = rolls.find(r => r.id === activeRollId);
 
-  if (currentView === View.SPLASH) {
+  if (currentView === View.SPLASH || isLoading) {
       return (
         <div className="fixed inset-0 bg-background-dark flex flex-col items-center justify-center z-[100] animate-fade-in">
             <div className="relative size-32 mb-8">
@@ -304,7 +313,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background-dark text-white font-body pb-24 overflow-x-hidden selection:bg-primary">
+    <div className="min-h-screen bg-background-dark text-white font-body pb-[calc(1.5rem+env(safe-area-inset-bottom)+60px)] overflow-x-hidden selection:bg-primary">
       
       {/* Uploading Overlay */}
       {isUploading && (
@@ -320,7 +329,7 @@ export default function App() {
 
       {/* DASHBOARD */}
       {currentView === View.DASHBOARD && (
-        <div className="p-6 pt-12 space-y-10 animate-fade-in max-w-2xl mx-auto">
+        <div className="p-6 pt-[calc(env(safe-area-inset-top)+3rem)] space-y-10 animate-fade-in max-w-2xl mx-auto">
             <header className="flex justify-between items-end">
                 <div>
                     <span className="text-[10px] font-mono text-primary font-bold tracking-widest uppercase">Overview</span>
@@ -396,13 +405,13 @@ export default function App() {
 
       {/* LIBRARY */}
       {currentView === View.LIBRARY && (
-        <div className="p-6 pt-12 animate-fade-in max-w-4xl mx-auto pb-32">
+        <div className="p-6 pt-[calc(env(safe-area-inset-top)+3rem)] animate-fade-in max-w-4xl mx-auto pb-32">
              <header className="flex justify-between items-end mb-8">
                 <div>
                     <span className="text-[10px] font-mono text-primary font-bold tracking-widest uppercase">Archive</span>
                     <h2 className="text-4xl font-display font-black tracking-tight mt-1">胶片库</h2>
                 </div>
-                <button onClick={() => setIsAddRollModalOpen(true)} className="size-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-primary transition-colors group">
+                <button onClick={() => setIsAddRollModalOpen(true)} className="size-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-primary transition-colors group active:scale-90">
                     <span className="material-symbols-outlined group-hover:rotate-90 transition-transform">add</span>
                 </button>
             </header>
@@ -430,7 +439,7 @@ export default function App() {
                   <img src={activeRoll.coverImage} className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-background-dark via-background-dark/20 to-transparent"></div>
                   
-                  <div className="absolute top-12 left-6 z-10">
+                  <div className="absolute top-[calc(env(safe-area-inset-top)+1rem)] left-6 z-10">
                       <button onClick={() => setCurrentView(View.LIBRARY)} className="size-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-90 transition-transform">
                           <span className="material-symbols-outlined">arrow_back</span>
                       </button>
@@ -455,22 +464,22 @@ export default function App() {
               <div className="p-6 space-y-8">
                   <div className="flex items-center justify-between">
                        <div className="flex gap-2">
-                           <button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-white/10 transition-all">
+                           <button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-white/10 transition-all active:scale-95">
                                <span className="material-symbols-outlined text-[18px]">grid_on</span>
                                数字印样
                            </button>
-                           <button onClick={() => setIsExifModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-white/10 transition-all">
+                           <button onClick={() => setIsExifModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-white/10 transition-all active:scale-95">
                                <span className="material-symbols-outlined text-[18px]">edit_note</span>
                                批量参数
                            </button>
                        </div>
-                       <button onClick={() => setIsDeleteConfirmOpen(true)} className="size-10 rounded-lg border border-red-500/20 text-red-500/50 flex items-center justify-center hover:bg-red-500/10 transition-colors">
+                       <button onClick={() => setIsDeleteConfirmOpen(true)} className="size-10 rounded-lg border border-red-500/20 text-red-500/50 flex items-center justify-center hover:bg-red-500/10 transition-colors active:scale-95">
                            <span className="material-symbols-outlined">delete</span>
                        </button>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
-                      <label className="aspect-square rounded border border-white/10 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all">
+                      <label className="aspect-square rounded border border-white/10 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 transition-all active:scale-95">
                           <span className="material-symbols-outlined text-primary">add_a_photo</span>
                           <span className="text-[10px] font-bold uppercase text-muted">添加</span>
                           <input type="file" multiple accept="image/*" className="hidden" onChange={handleAddPhotos} />
@@ -495,14 +504,14 @@ export default function App() {
 
       {/* PROFILE */}
       {currentView === View.PROFILE && (
-          <div className="p-6 pt-12 animate-fade-in max-w-2xl mx-auto space-y-10 pb-32">
+          <div className="p-6 pt-[calc(env(safe-area-inset-top)+3rem)] animate-fade-in max-w-2xl mx-auto space-y-10 pb-32">
               <header className="flex justify-between items-start">
                   <h2 className="text-4xl font-display font-black tracking-tight uppercase">档案</h2>
                   <div className="flex gap-2">
-                    <button onClick={() => setIsExportSettingsOpen(true)} className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
+                    <button onClick={() => setIsExportSettingsOpen(true)} className="size-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-90">
                         <span className="material-symbols-outlined">tune</span>
                     </button>
-                    <button onClick={() => setIsProfileEditorOpen(true)} className="size-10 rounded-full bg-primary flex items-center justify-center">
+                    <button onClick={() => setIsProfileEditorOpen(true)} className="size-10 rounded-full bg-primary flex items-center justify-center active:scale-90">
                         <span className="material-symbols-outlined">edit</span>
                     </button>
                   </div>
@@ -522,7 +531,7 @@ export default function App() {
                       <span className="font-mono text-white">{userProfile.favoriteCamera}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                      <span className="text-muted uppercase tracking-widest">常用底片</span>
+                      <span className="text-muted uppercase tracking-widest">常用胶卷</span>
                       <span className="font-mono text-white">{userProfile.favoriteFilm}</span>
                   </div>
                   <div className="flex justify-between text-xs">
@@ -555,7 +564,7 @@ export default function App() {
                             <input type="text" placeholder="相机" value={newRollData.camera} onChange={(e) => setNewRollData({...newRollData, camera: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none" />
                         </div>
                     </div>
-                    <button onClick={handleManualAddRoll} className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors">创建胶卷</button>
+                    <button onClick={handleManualAddRoll} className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors active:scale-95">创建胶卷</button>
                </div>
           </div>
       )}
@@ -572,19 +581,18 @@ export default function App() {
                       <p className="text-sm text-muted mt-2">删除后数据将无法找回。</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-3 rounded-lg bg-white/5 border border-white/10 font-bold uppercase text-xs tracking-widest">取消</button>
-                      <button onClick={handleDeleteRoll} className="py-3 rounded-lg bg-red-600 text-white font-bold uppercase text-xs tracking-widest">删除</button>
+                      <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-3 rounded-lg bg-white/5 border border-white/10 font-bold uppercase text-xs tracking-widest active:scale-95">取消</button>
+                      <button onClick={handleDeleteRoll} className="py-3 rounded-lg bg-red-600 text-white font-bold uppercase text-xs tracking-widest active:scale-95">删除</button>
                   </div>
               </div>
           </div>
       )}
 
-      {isExifModalOpen && activeRoll && <BatchExifEditor roll={activeRoll} onSave={(data) => { setRolls(prev => prev.map(r => r.id === activeRoll.id ? { ...r, defaultExif: data } : r)); setIsExifModalOpen(false); }} onClose={() => setIsExifModalOpen(false)} />}
+      {isExifModalOpen && activeRoll && <BatchExifEditor roll={activeRoll} onSave={handleSaveExif} onClose={() => setIsExifModalOpen(false)} />}
       {isProfileEditorOpen && <ProfileEditor profile={userProfile} onSave={setUserProfile} onClose={() => setIsProfileEditorOpen(false)} />}
       {isExportSettingsOpen && <ExportSettings onClose={() => setIsExportSettingsOpen(false)} />}
       {selectedPhotoId && activeRoll && <Lightbox photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} onClose={() => setSelectedPhotoId(null)} onAnalyze={handleAnalyzePhoto} />}
 
-      {/* Fix: Removed redundant View.SPLASH check because of the early return at the start of the component */}
       {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && (
           <Navigation currentView={currentView} onChangeView={setCurrentView} />
       )}

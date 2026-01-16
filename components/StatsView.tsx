@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Roll, RollStatus } from '../types';
 
@@ -50,7 +51,8 @@ export const StatsView: React.FC<StatsViewProps> = ({ rolls }) => {
               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary" 
-                  style={{ width: `${(count / rolls.length) * 100}%` }}
+                  // Fixed: casting count to number to resolve type error in arithmetic operation
+                  style={{ width: `${((count as number) / rolls.length) * 100}%` }}
                 ></div>
               </div>
             </div>

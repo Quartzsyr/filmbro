@@ -13,15 +13,14 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
   const containerRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  // 横向布局每行照片数
   const FRAMES_PER_ROW = 6; 
 
-  // 监听窗口大小变化，动态计算缩放比例以适配屏幕
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current && sheetRef.current) {
-        const containerWidth = containerRef.current.offsetWidth - 48; // 减去 padding
-        const sheetWidth = 1200; // 设计的最小宽度
+        // 增加边距考虑，让预览更完整
+        const containerWidth = containerRef.current.offsetWidth - 32; 
+        const sheetWidth = 1200; 
         const newScale = Math.min(1, containerWidth / sheetWidth);
         setScale(newScale);
       }
@@ -39,16 +38,15 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
     setIsExporting(true);
 
     try {
-      // 导出前暂时移除缩放，确保截图质量
       const originalTransform = element.style.transform;
       element.style.transform = 'none';
 
       const canvas = await html2canvas(element, {
         backgroundColor: '#000000',
         useCORS: true,
-        scale: 2, 
+        scale: 2.5, 
         logging: false,
-        width: 1200, // 强制宽度
+        width: 1200, 
       });
 
       element.style.transform = originalTransform;
@@ -71,15 +69,15 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
 
   return (
     <div className="fixed inset-0 z-[60] bg-[#0a0a0a] flex flex-col overflow-hidden animate-fade-in font-display">
-      {/* 顶部工具栏 */}
-      <div className="flex items-center justify-between p-4 bg-surface-highlight border-b border-white/10 shrink-0 shadow-lg z-20">
-        <button onClick={onClose} className="flex items-center text-muted hover:text-white transition-colors">
+      {/* 顶部工具栏 - 增加安全区域适配 */}
+      <div className="flex items-center justify-between px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] bg-surface-highlight border-b border-white/10 shrink-0 shadow-lg z-20">
+        <button onClick={onClose} className="flex items-center text-muted hover:text-white transition-colors h-10 px-2 active:scale-90">
           <span className="material-symbols-outlined">close</span>
           <span className="ml-1 text-xs font-bold uppercase tracking-widest">返回</span>
         </button>
         <div className="flex flex-col items-center">
             <h2 className="text-white font-black uppercase tracking-[0.4em] text-[10px]">Digital Archive Preview</h2>
-            <p className="text-[9px] text-primary font-mono mt-0.5">全貌预览模式 • 自动适配屏幕</p>
+            <p className="text-[9px] text-primary font-mono mt-0.5">全貌预览模式 • 自动适配</p>
         </div>
         <button 
           onClick={handleExport}
@@ -91,21 +89,20 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
           ) : (
             <span className="material-symbols-outlined text-sm">download</span>
           )}
-          {isExporting ? '处理中' : '导出印样'}
+          {isExporting ? '处理中' : '导出'}
         </button>
       </div>
 
       {/* 预览区域 */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto p-6 bg-[#121212] flex flex-col items-center no-scrollbar"
+        className="flex-1 overflow-auto p-4 bg-[#121212] flex flex-col items-center no-scrollbar"
       >
-        {/* 缩放包装器：用于在视觉上缩小巨大的印样以适配手机屏幕 */}
         <div 
-          className="origin-top transition-transform duration-300 ease-out"
+          className="origin-top transition-transform duration-300 ease-out mt-4"
           style={{ 
             transform: `scale(${scale})`,
-            width: '1200px', // 内部保持固定宽度，由 scale 处理适配
+            width: '1200px', 
             height: 'fit-content'
           }}
         >
@@ -115,11 +112,9 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
             id="contact-sheet"
           >
             
-            {/* 装饰性边缘标记 */}
             <div className="absolute top-4 left-4 text-[8px] font-mono text-gray-800 uppercase tracking-widest">Kodak Safety Film • Archive System</div>
             <div className="absolute top-4 right-4 text-[8px] font-mono text-gray-800 uppercase tracking-widest">Landscape Proof Sheet</div>
 
-            {/* 页眉 */}
             <div className="border-b-[4px] border-white mb-10 pb-6 flex justify-between items-end">
               <div className="flex items-end gap-10">
                 <div className="space-y-1">
@@ -150,7 +145,6 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
               </div>
             </div>
 
-            {/* 底片行渲染 */}
             <div className="flex flex-col gap-12">
               {Array.from({ length: Math.ceil(roll.photos.length / FRAMES_PER_ROW) }).map((_, rowIndex) => (
                 <div key={rowIndex} className="relative bg-[#080808] py-8 rounded-sm group border-y border-white/5">
@@ -191,7 +185,6 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
               ))}
             </div>
 
-            {/* 页脚 */}
             <div className="mt-20 pt-8 border-t-2 border-white/20 flex justify-between items-center text-[10px] font-mono text-gray-500 uppercase tracking-widest">
                <div className="flex gap-12">
                   <div className="flex flex-col gap-1">
@@ -215,8 +208,7 @@ export const ContactSheet: React.FC<ContactSheetProps> = ({ roll, onClose }) => 
           </div>
         </div>
         
-        {/* 占位符，防止缩放后内容底部被裁剪 */}
-        <div style={{ height: '100px', flexShrink: 0 }}></div>
+        <div style={{ height: '150px', flexShrink: 0 }}></div>
       </div>
     </div>
   );
