@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Roll, RollStatus, FilmPhoto, UserProfile, StockFilm } from './types';
+import { View, Roll, RollStatus, FilmPhoto, UserProfile, StockFilm, ExifData } from './types';
 import { Navigation } from './components/Navigation';
 import { Scanner } from './components/Scanner';
 import { BatchExifEditor } from './components/BatchExifEditor';
@@ -131,6 +131,7 @@ export default function App() {
   const [activeRollId, setActiveRollId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
+  const [isExifEditorOpen, setIsExifEditorOpen] = useState(false);
   const [isAddRollModalOpen, setIsAddRollModalOpen] = useState(false);
   const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400', camera: '' });
   const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
@@ -204,6 +205,16 @@ export default function App() {
       setIsUploading(false);
   };
 
+  const handleSaveExif = async (data: ExifData) => {
+      const roll = rolls.find(r => r.id === activeRollId);
+      if (roll) {
+          const updatedRoll = { ...roll, defaultExif: data, camera: data.camera, date: data.date || roll.date };
+          setRolls(prev => prev.map(r => r.id === activeRollId ? updatedRoll : r));
+          await saveRollToDB(updatedRoll);
+      }
+      setIsExifEditorOpen(false);
+  };
+
   const handleAnalyzePhotoWrapped = async (photoId: string, url: string) => {
       const result = await analyzePhoto(url);
       const roll = rolls.find(r => r.id === activeRollId);
@@ -272,7 +283,10 @@ export default function App() {
                   <div className="absolute bottom-8 left-6 right-6"><span className="text-xs text-primary font-bold uppercase">{activeRoll.brand}</span><h2 className="text-5xl font-display font-black uppercase mt-1 leading-none">{activeRoll.name}</h2></div>
               </div>
               <div className="p-6 space-y-8">
-                  <div className="flex gap-2"><button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">数字印样</button></div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCurrentView(View.CONTACT_SHEET)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">数字印样</button>
+                    <button onClick={() => setIsExifEditorOpen(true)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs font-bold uppercase">编辑元数据</button>
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                       <label className="aspect-square rounded border border-white/10 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer bg-white/5"><span className="material-symbols-outlined text-primary">add_a_photo</span><span className="text-[10px] font-bold uppercase">上传</span><input type="file" multiple accept="image/*" className="hidden" onChange={handleAddPhotos} /></label>
                       {activeRoll.photos.map(photo => (<div key={photo.id} onClick={() => setSelectedPhotoId(photo.id)} className="relative aspect-square rounded overflow-hidden border border-white/5 cursor-pointer"><img src={photo.url} className="w-full h-full object-cover" />{photo.analysis && <div className="absolute top-1.5 right-1.5 size-3 bg-primary rounded-full shadow-lg"></div>}</div>))}
@@ -305,6 +319,10 @@ export default function App() {
       {currentView === View.DEVELOP_TIMER && <DevelopmentTimer onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.CONTACT_SHEET && activeRoll && <ContactSheet roll={activeRoll} onClose={() => setCurrentView(View.ROLL_DETAIL)} />}
       
+      {isExifEditorOpen && activeRoll && (
+          <BatchExifEditor roll={activeRoll} onSave={handleSaveExif} onClose={() => setIsExifEditorOpen(false)} />
+      )}
+
       {selectedPhotoId && activeRoll && (
           <Lightbox 
             photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} 
