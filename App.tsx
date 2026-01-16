@@ -11,6 +11,8 @@ import { ExportSettings } from './components/ExportSettings';
 import { LightMeter } from './components/LightMeter';
 import { StatsView } from './components/StatsView';
 import { FilmFridge } from './components/FilmFridge';
+import { NegativeInverter } from './components/NegativeInverter';
+import { ChemistryCalculator } from './components/ChemistryCalculator';
 import { IdentificationResult, analyzePhoto } from './services/geminiService';
 import { resizeImage } from './utils/imageUtils';
 import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB } from './services/dbService';
@@ -381,14 +383,28 @@ export default function App() {
                         <span className="material-symbols-outlined text-primary group-hover:rotate-12 transition-transform">timer</span>
                         <div className="text-left">
                             <div className="text-sm font-bold">暗房定时</div>
-                            <div className="text-[10px] text-muted uppercase">AI 冲洗指导</div>
+                            <div className="text-[10px] text-muted uppercase">冲洗指导</div>
                         </div>
                     </button>
                     <button onClick={() => setCurrentView(View.LIGHT_METER)} className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors group">
                         <span className="material-symbols-outlined text-muted group-hover:text-primary transition-colors">exposure</span>
                         <div className="text-left">
                             <div className="text-sm font-bold">测光表</div>
-                            <div className="text-[10px] text-muted uppercase">精密曝光控制</div>
+                            <div className="text-[10px] text-muted uppercase">精密曝光</div>
+                        </div>
+                    </button>
+                    <button onClick={() => setCurrentView(View.NEGATIVE_INVERTER)} className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors group">
+                        <span className="material-symbols-outlined text-muted group-hover:text-primary transition-colors">filter_b_and_w</span>
+                        <div className="text-left">
+                            <div className="text-sm font-bold">底片翻转</div>
+                            <div className="text-[10px] text-muted uppercase">反相预览</div>
+                        </div>
+                    </button>
+                    <button onClick={() => setCurrentView(View.CHEM_CALC)} className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors group">
+                        <span className="material-symbols-outlined text-muted group-hover:text-primary transition-colors">calculate</span>
+                        <div className="text-left">
+                            <div className="text-sm font-bold">药液计算</div>
+                            <div className="text-[10px] text-muted uppercase">稀释比例</div>
                         </div>
                     </button>
                 </div>
@@ -418,7 +434,9 @@ export default function App() {
         </div>
       )}
 
-      {/* FRIDGE VIEW */}
+      {/* OTHER VIEWS */}
+      {currentView === View.NEGATIVE_INVERTER && <NegativeInverter onClose={() => setCurrentView(View.DASHBOARD)} />}
+      {currentView === View.CHEM_CALC && <ChemistryCalculator onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.FRIDGE && (
           <FilmFridge 
             stock={stock} 
@@ -644,7 +662,7 @@ export default function App() {
       {isExportSettingsOpen && <ExportSettings onClose={() => setIsExportSettingsOpen(false)} />}
       {selectedPhotoId && activeRoll && <Lightbox photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} onClose={() => setSelectedPhotoId(null)} onAnalyze={handleAnalyzePhoto} />}
 
-      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && (
+      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && currentView !== View.NEGATIVE_INVERTER && currentView !== View.CHEM_CALC && (
           <Navigation currentView={currentView} onChangeView={setCurrentView} />
       )}
     </div>
