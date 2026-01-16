@@ -30,14 +30,12 @@ export interface DevelopmentRecipe {
 
 /**
  * 助手函数：清理并验证 Base64 图片数据
- * 确保返回纯净的 base64 字符串，不含 data:image/xxx;base64, 前缀
+ * 移除 Data URL 前缀并去除多余空白，确保纯净的 Base64 传输
  */
-const prepareImageData = (imageData: string) => {
-  if (!imageData) throw new Error("Image data is empty");
-  if (imageData.includes('base64,')) {
-    return imageData.split('base64,')[1];
-  }
-  return imageData;
+const prepareImageData = (base64Image: string) => {
+  if (!base64Image) throw new Error("Image data is missing");
+  const base64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
+  return base64.trim();
 };
 
 /**
@@ -55,7 +53,7 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      // 修正：直接传递内容对象而非数组
+      // 修复：使用标准的 contents 对象结构而非数组嵌套
       contents: {
         parts: [
           {
@@ -64,11 +62,11 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
               data: prepareImageData(base64Image)
             }
           },
-          { text: "请识别这张照片中的胶卷品牌、型号名称（如 Gold, Portra, Tri-X）以及 ISO 值。" }
+          { text: "请识别这张照片中的胶片品牌、型号和 ISO。" }
         ]
       },
       config: {
-        systemInstruction: "你是一个专业的胶片摄影专家。你的任务是识别照片中的胶卷包装或底片边缘。请严谨识别，并以 JSON 格式返回 brand, name, iso, type 字段。若无法确定，请返回最可能的估算值。",
+        systemInstruction: "你是一个专业的胶片摄影专家。你的任务是识别照片中的胶卷包装或底片边缘信息，并以 JSON 格式返回。字段：brand (品牌), name (型号), iso (数字), type (类型: Color Negative, B&W, 或 Slide)。不要返回 Markdown 代码块。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -83,13 +81,10 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Empty response from AI");
-    
-    const result = JSON.parse(text.trim());
+    const result = JSON.parse(response.text || "{}");
     return { ...fallbackData, ...result };
   } catch (error) {
-    console.error("AI识别失败，使用默认值:", error);
+    console.error("Film Identification Error:", error);
     return fallbackData;
   }
 };
@@ -99,36 +94,30 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
   const fallbackData: PhotoAnalysisResult = {
-    composition: "由于网络或格式原因，AI 暂时无法解析构图细节。",
-    mood: "光影间流露出的韵味难以言表。",
-    tags: ["Film", "Photography"],
-    rating: 7.5
+    composition: "由于网络或解析限制，暂无法提供深度分析。",
+    mood: "光影间流露出的经典胶片韵味。",
+    tags: ["Photography", "Film"],
+    rating: 8.0
   };
 
   try {
-    let base64Data = "";
-
-    // 判断是 URL 还是 Base64
-    if (photoUrl.startsWith('data:')) {
-      base64Data = prepareImageData(photoUrl);
-    } else if (photoUrl.startsWith('http')) {
-      // 网络图片需要先 fetch
+    let base64Data = photoUrl;
+    
+    // 如果是网络图片，尝试转换。在手机端，CORS 限制较严，捕获失败则返回默认。
+    if (photoUrl.startsWith('http') && !photoUrl.includes('base64')) {
       try {
-        const fetchRes = await fetch(photoUrl);
-        const blob = await fetchRes.blob();
-        const converted = await new Promise<string>((resolve) => {
+        const response = await fetch(photoUrl);
+        const blob = await response.blob();
+        base64Data = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = reject;
           reader.readAsDataURL(blob);
         });
-        base64Data = prepareImageData(converted);
       } catch (e) {
-        console.warn("无法获取远程图片进行分析:", e);
+        console.warn("External fetch failed, might be CORS.");
         return fallbackData;
       }
-    } else {
-      // 假设是纯 base64
-      base64Data = photoUrl;
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -139,14 +128,14 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
           {
             inlineData: {
               mimeType: "image/jpeg",
-              data: base64Data
+              data: prepareImageData(base64Data)
             }
           },
-          { text: "请作为一名摄影评论家，对这张照片进行专业的中文艺术分析。" }
+          { text: "请对这张照片进行艺术分析。" }
         ]
       },
       config: {
-        systemInstruction: "分析照片的构图(composition)、氛围(mood)，给出英文标签(tags)和 1-10 的艺术评分(rating)。请务必只返回 JSON 格式数据。",
+        systemInstruction: "你是一位资深的画廊策展人和摄影评论家。请用中文分析照片的构图(composition)、氛围与影调(mood)，提供 5-8 个英文标签(tags)，并给出 1-10 的艺术评分(rating)。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -161,13 +150,10 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
       }
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Empty analysis result");
-    
-    const result = JSON.parse(text.trim());
+    const result = JSON.parse(response.text || "{}");
     return { ...fallbackData, ...result };
   } catch (error) {
-    console.error("AI分析失败:", error);
+    console.error("Photo Analysis Error:", error);
     return fallbackData;
   }
 };
@@ -182,7 +168,7 @@ export const getDevelopmentRecipe = async (userPrompt: string): Promise<Developm
       model: "gemini-3-flash-preview",
       contents: { parts: [{ text: userPrompt }] },
       config: {
-        systemInstruction: "你是一位暗房大师。请生成底片冲洗 JSON 配方。duration 为秒数，color 为 Tailwind 颜色类名。",
+        systemInstruction: "你是一位资深的暗房技师。请根据用户需求生成详细的底片冲洗步骤 JSON。时间单位为秒，颜色必须是 Tailwind CSS 的颜色类名。",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -209,10 +195,9 @@ export const getDevelopmentRecipe = async (userPrompt: string): Promise<Developm
       }
     });
     
-    const text = response.text;
-    return text ? JSON.parse(text.trim()) : null;
+    return JSON.parse(response.text || "null");
   } catch (error) {
-    console.error("生成配方失败:", error);
+    console.error("Recipe Generation Error:", error);
     return null;
   }
 };
