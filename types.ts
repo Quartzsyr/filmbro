@@ -53,6 +53,7 @@ export interface Roll {
   brand: string;
   name: string;
   iso: number;
+  filmType: string; // 新增：胶片种类
   camera: string;
   date: string;
   status: RollStatus;

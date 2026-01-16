@@ -39,6 +39,125 @@ const INITIAL_PROFILE: UserProfile = {
     ]
 };
 
+const FILM_BRANDS = [
+  { name: 'Kodak', color: '#ffcc00' },
+  { name: 'Fujifilm', color: '#009933' },
+  { name: 'Ilford', color: '#ffffff' },
+  { name: 'Agfa', color: '#ff0000' },
+  { name: 'CineStill', color: '#00ccff' },
+  { name: 'Lomography', color: '#cc33ff' }
+];
+
+const FILM_TYPES = [
+    { id: 'color_neg', label: '彩色负片', icon: 'palette' },
+    { id: 'bw', label: '黑白胶片', icon: 'filter_b_and_w' },
+    { id: 'slide', label: '彩色反转', icon: 'wb_sunny' },
+    { id: 'cine', label: '电影底片', icon: 'movie' }
+];
+
+const ManualRollEntry = ({ onSave, onClose, defaultCamera }: { onSave: (roll: Partial<Roll>) => void, onClose: () => void, defaultCamera: string }) => {
+    const [brand, setBrand] = useState('Kodak');
+    const [name, setName] = useState('');
+    const [iso, setIso] = useState(400);
+    const [filmType, setFilmType] = useState('color_neg');
+    const [camera, setCamera] = useState(defaultCamera);
+    const [totalFrames, setTotalFrames] = useState(36);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name) {
+            alert("请输入胶卷型号");
+            return;
+        }
+        onSave({
+            brand,
+            name,
+            iso,
+            filmType,
+            camera,
+            totalFrames,
+            date: new Date().toISOString().split('T')[0],
+            status: RollStatus.ACTIVE,
+            photos: [],
+            framesTaken: 0,
+            coverImage: 'https://images.unsplash.com/photo-1543157145-f78c636d023d?auto=format&fit=crop&q=80&w=800'
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-fade-in">
+            <div className="absolute inset-0 bg-black/90 backdrop-blur-xl" onClick={onClose}></div>
+            <form onSubmit={handleSubmit} className="relative w-full max-w-lg bg-surface-dark border-t sm:border border-white/10 rounded-t-[3rem] sm:rounded-[3rem] p-8 sm:p-10 space-y-8 shadow-2xl overflow-y-auto max-h-[95vh] no-scrollbar">
+                <div className="flex justify-between items-center">
+                    <div className="space-y-1">
+                        <span className="text-[10px] text-primary font-black uppercase tracking-[0.4em]">Manual Archive</span>
+                        <h3 className="text-2xl font-display font-black uppercase italic tracking-tighter">新胶卷录入</h3>
+                    </div>
+                    <button type="button" onClick={onClose} className="size-10 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-all"><span className="material-symbols-outlined">close</span></button>
+                </div>
+
+                <div className="space-y-6">
+                    {/* 品牌选择 */}
+                    <div>
+                        <label className="text-[10px] text-muted font-black uppercase tracking-widest mb-3 block">1. 品牌选择</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {FILM_BRANDS.map(b => (
+                                <button key={b.name} type="button" onClick={() => setBrand(b.name)} className={`py-3 rounded-2xl border text-[10px] font-black uppercase transition-all ${brand === b.name ? 'bg-white text-black border-white scale-95 shadow-lg' : 'bg-white/5 border-white/5 text-muted hover:border-white/20'}`}>
+                                    {b.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 种类选择 */}
+                    <div>
+                        <label className="text-[10px] text-muted font-black uppercase tracking-widest mb-3 block">2. 胶片种类</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            {FILM_TYPES.map(t => (
+                                <button key={t.id} type="button" onClick={() => setFilmType(t.id)} className={`flex items-center gap-3 p-4 rounded-2xl border transition-all ${filmType === t.id ? 'bg-primary/20 border-primary text-primary shadow-lg shadow-primary/10 scale-95' : 'bg-white/5 border-white/5 text-muted hover:border-white/10'}`}>
+                                    <span className="material-symbols-outlined text-[20px]">{t.icon}</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{t.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* 详细参数 */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-muted font-black uppercase tracking-widest ml-1">型号</label>
+                            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="如: Portra 400" className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:border-primary outline-none transition-all" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-muted font-black uppercase tracking-widest ml-1">ISO</label>
+                            <input type="number" value={iso} onChange={e => setIso(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm font-mono focus:border-primary outline-none transition-all" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-muted font-black uppercase tracking-widest ml-1">拍摄器材</label>
+                            <input type="text" value={camera} onChange={e => setCamera(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:border-primary outline-none transition-all" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-muted font-black uppercase tracking-widest ml-1">总曝光张数</label>
+                            <select value={totalFrames} onChange={e => setTotalFrames(parseInt(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm focus:border-primary outline-none appearance-none transition-all">
+                                <option value={36}>36 曝光 (135)</option>
+                                <option value={24}>24 曝光 (135)</option>
+                                <option value={12}>12 曝光 (120)</option>
+                                <option value={10}>10 曝光 (120)</option>
+                                <option value={8}>8 曝光 (120)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" className="w-full py-5 bg-primary text-white font-black uppercase tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 active:scale-95 transition-all">开启新卷</button>
+            </form>
+        </div>
+    );
+};
+
 const Lightbox = ({ photo, onClose, onAnalyze }: { 
     photo: FilmPhoto, 
     onClose: () => void,
@@ -114,7 +233,6 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>(View.SPLASH);
   const [isLoading, setIsLoading] = useState(true);
   const [isTestLoading, setIsTestLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [stock, setStock] = useState<StockFilm[]>([]);
@@ -126,6 +244,7 @@ export default function App() {
   const activeRoll = useMemo(() => rolls.find(r => r.id === activeRollId), [rolls, activeRollId]);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
+  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   
   useEffect(() => {
       const initLoad = async () => {
@@ -168,21 +287,29 @@ export default function App() {
     }
     setIsTestLoading(true);
     try {
-        // 先存储，以便测试函数能读到
         localStorage.setItem('LOCAL_GEMINI_KEY', apiKeyInput);
-        // 手动同步 process.env 以免内存缓存
         (window as any).process.env.API_KEY = apiKeyInput;
-
-        // 测试连接
         const insight = await getDailyInsight();
         setDailyInsight(insight);
         alert("✅ API 连接测试成功！Key 已保存。");
     } catch (e: any) {
         alert(`❌ 连接测试失败: ${e.message}`);
-        // 可选：如果测试失败，可以决定是否保留 Key。这里选择保留但给出提示。
     } finally {
         setIsTestLoading(false);
     }
+  };
+
+  const handleManualAddSave = async (data: Partial<Roll>) => {
+      const newRoll: Roll = {
+          ...data,
+          id: Math.random().toString(36).substr(2, 9),
+      } as Roll;
+
+      setRolls(prev => [newRoll, ...prev]);
+      await saveRollToDB(newRoll);
+      setIsManualAddOpen(false);
+      setActiveRollId(newRoll.id);
+      setCurrentView(View.ROLL_DETAIL);
   };
 
   const handleScanComplete = async (result: IdentificationResult, image: string) => {
@@ -191,6 +318,7 @@ export default function App() {
       brand: result.brand,
       name: result.name,
       iso: result.iso,
+      filmType: result.type || 'color_neg',
       camera: userProfile.favoriteCamera || 'Leica M6',
       date: new Date().toISOString().split('T')[0],
       status: RollStatus.ACTIVE,
@@ -209,8 +337,7 @@ export default function App() {
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !activeRoll) return;
     const files = Array.from(e.target.files) as File[];
-    setUploadProgress(0);
-
+    
     const newPhotos: FilmPhoto[] = [];
     for (let i = 0; i < files.length; i++) {
       try {
@@ -232,9 +359,18 @@ export default function App() {
     await saveRollToDB(updatedRoll);
   };
 
+  const handleNavigationChange = (view: View) => {
+      // 如果点击的是扫描按钮（主 FAB），现在改为直接打开手动添加面板
+      if (view === View.SCANNER) {
+          setIsManualAddOpen(true);
+      } else {
+          setCurrentView(view);
+      }
+  };
+
   if (currentView === View.SPLASH || isLoading) {
       return (
-        <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[150]">
+        <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-[250]">
             <div className="relative size-32 mb-8 flex items-center justify-center">
                 <div className="absolute inset-0 border-4 border-primary/20 rounded-full"></div>
                 <div className="absolute inset-0 border-t-4 border-primary rounded-full animate-spin"></div>
@@ -307,6 +443,10 @@ export default function App() {
                         <span className="material-symbols-outlined text-muted">science</span>
                         <span className="font-black uppercase text-xs tracking-widest">药液配比</span>
                     </button>
+                    <button onClick={() => setCurrentView(View.SCANNER)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
+                        <span className="material-symbols-outlined text-muted">document_scanner</span>
+                        <span className="font-black uppercase text-xs tracking-widest">AI 识别</span>
+                    </button>
                 </div>
             </section>
         </div>
@@ -377,48 +517,81 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 pt-2">
-                        <div className={`size-2 rounded-full ${apiKeyInput ? 'bg-green-500 animate-pulse' : 'bg-muted'}`}></div>
-                        <span className="text-[9px] text-muted font-black uppercase tracking-[0.2em]">{apiKeyInput ? '密钥已就绪' : '等待输入密钥'}</span>
-                      </div>
-                  </div>
-              </section>
-
-              <section className="space-y-6">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">系统偏好</h3>
-                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden divide-y divide-white/5">
-                      <div className="flex items-center justify-between p-7">
-                          <div>
-                              <div className="text-base font-black">OLED 纯黑模式</div>
-                              <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">极致深邃对比</div>
-                          </div>
-                          <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-14 h-7 rounded-full relative transition-all ${userProfile.settings?.oledMode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-5 bg-white rounded-full transition-transform ${userProfile.settings?.oledMode ? 'translate-x-7' : 'translate-x-0'}`}></div></button>
-                      </div>
                   </div>
               </section>
           </div>
       )}
 
       {currentView === View.LIBRARY && (
-          <div className="p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] animate-fade-in max-w-4xl mx-auto">
-             <header className="flex justify-between items-end mb-10">
+          <div className="relative p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] animate-fade-in max-w-4xl mx-auto min-h-[100dvh]">
+             <header className="flex justify-between items-end mb-12">
                 <div>
-                    <span className="text-[11px] text-primary font-black uppercase tracking-[0.5em]">Collections</span>
-                    <h2 className="text-4xl font-display font-black tracking-tighter mt-1 italic uppercase">胶片图库</h2>
+                    <span className="text-[11px] text-primary font-black uppercase tracking-[0.5em]">Digital Archive</span>
+                    <h2 className="text-5xl font-display font-black tracking-tighter mt-2 italic uppercase leading-none">归档图库</h2>
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] font-mono text-muted uppercase tracking-widest font-black italic">Archivist v4.0</div>
                 </div>
              </header>
-             <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                {rolls.map(roll => (
-                    <div key={roll.id} onClick={() => { setActiveRollId(roll.id); setCurrentView(View.ROLL_DETAIL); }} className="relative aspect-[4/5] rounded-[2rem] overflow-hidden border border-white/5 group cursor-pointer shadow-xl transition-transform hover:-translate-y-2 duration-500">
+
+             <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 pb-32">
+                {rolls.map((roll, index) => (
+                    <div 
+                        key={roll.id} 
+                        onClick={() => { setActiveRollId(roll.id); setCurrentView(View.ROLL_DETAIL); }} 
+                        className="relative aspect-[3/4] rounded-[2.5rem] overflow-hidden border border-white/5 group cursor-pointer shadow-2xl transition-all hover:-translate-y-3 duration-700 animate-fade-in"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                        <div className="absolute top-4 left-4 z-20 px-3 py-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                                <div className="size-1.5 bg-primary rounded-full animate-pulse"></div>
+                                {roll.status}
+                            </span>
+                        </div>
+
+                        <div className="absolute top-4 right-4 z-20 px-3 py-1 bg-white/10 backdrop-blur-xl border border-white/5 rounded-full">
+                            <span className="text-[9px] font-mono text-white/80 font-black tracking-tighter">
+                                {roll.framesTaken}/{roll.totalFrames}
+                            </span>
+                        </div>
+
                         <img src={roll.coverImage} className="absolute inset-0 size-full object-cover transition-transform duration-1000 group-hover:scale-110" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80"></div>
-                        <div className="absolute bottom-6 left-6 right-6">
-                            <div className="text-[9px] font-mono text-primary font-black uppercase tracking-widest">{roll.brand}</div>
-                            <div className="text-lg font-display font-black uppercase mt-1 leading-tight tracking-tighter italic">{roll.name}</div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/10 to-transparent opacity-90"></div>
+                        
+                        <div className="absolute bottom-6 left-6 right-6 space-y-3">
+                            <div>
+                                <div className="text-[9px] font-mono text-primary font-black uppercase tracking-[0.3em]">{roll.brand}</div>
+                                <div className="text-xl font-display font-black uppercase mt-1 leading-none tracking-tighter italic">{roll.name}</div>
+                                <div className="text-[8px] text-white/40 uppercase mt-1 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[10px]">calendar_today</span>
+                                    {roll.date}
+                                </div>
+                            </div>
+                            <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-primary transition-all duration-1000 shadow-[0_0_10px_rgba(166,23,39,1)]" 
+                                    style={{ width: `${(roll.framesTaken / roll.totalFrames) * 100}%` }}
+                                ></div>
+                            </div>
                         </div>
                     </div>
                 ))}
+
+                {rolls.length === 0 && (
+                    <div className="col-span-full py-40 flex flex-col items-center justify-center space-y-6 opacity-30">
+                        <span className="material-symbols-outlined text-8xl">camera_roll</span>
+                        <p className="text-xs font-black uppercase tracking-[0.5em]">暂无归档胶卷</p>
+                    </div>
+                )}
              </div>
+
+             <button 
+                onClick={() => setIsManualAddOpen(true)}
+                className="fixed bottom-32 right-8 z-[60] size-16 rounded-full bg-primary text-white shadow-[0_10px_40px_rgba(166,23,39,0.5)] flex items-center justify-center border-4 border-black/40 backdrop-blur-md active:scale-90 transition-transform group"
+             >
+                <span className="material-symbols-outlined text-4xl group-hover:rotate-90 transition-transform duration-500">add</span>
+                <div className="absolute -inset-2 border-2 border-primary/20 rounded-full animate-ping opacity-20 pointer-events-none"></div>
+             </button>
           </div>
       )}
 
@@ -460,6 +633,14 @@ export default function App() {
       {currentView === View.STATS && <StatsView rolls={rolls} stock={stock} />}
       {currentView === View.SCANNER && <Scanner onScanComplete={handleScanComplete} onClose={() => setCurrentView(View.DASHBOARD)} />}
 
+      {isManualAddOpen && (
+          <ManualRollEntry 
+            onSave={handleManualAddSave} 
+            onClose={() => setIsManualAddOpen(false)} 
+            defaultCamera={userProfile.favoriteCamera || 'Leica M6'} 
+          />
+      )}
+
       {selectedPhotoId && activeRoll && (
           <Lightbox 
             photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} 
@@ -481,7 +662,7 @@ export default function App() {
           />
       )}
 
-      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && currentView !== View.SCENE_SCOUT && currentView !== View.NEGATIVE_INVERTER && currentView !== View.RECIPROCITY_LAB && (<Navigation currentView={currentView} onChangeView={setCurrentView} />)}
+      <Navigation currentView={currentView} onChangeView={handleNavigationChange} />
     </div>
   );
 }
