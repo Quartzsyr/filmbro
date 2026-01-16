@@ -2,6 +2,7 @@
   "name": "Film Archive AI",
   "description": "A digital darkroom and film archive manager with AI-powered film stock recognition.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "geolocation"
   ]
 }

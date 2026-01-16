@@ -45,6 +45,24 @@ const prepareImageData = (base64Image: string) => {
 };
 
 /**
+ * 根据天气和库存推荐胶卷
+ */
+export const recommendFilm = async (weather: string, stock: any[]): Promise<string> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  
+  const ai = new GoogleGenAI({ apiKey });
+  const stockInfo = stock.map(f => `${f.brand} ${f.name} (ISO ${f.iso})`).join(', ');
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `当前天气：${weather}。我的胶卷库存有：${stockInfo}。请根据天气推荐最适合今天带出门的一款胶卷，并简述原因（中文，50字以内）。`
+  });
+
+  return response.text || "建议带上全能的 ISO 400 胶卷。";
+};
+
+/**
  * 识别胶片型号
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {

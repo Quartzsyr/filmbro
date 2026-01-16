@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Roll, RollStatus, FilmPhoto, UserProfile } from './types';
+import { View, Roll, RollStatus, FilmPhoto, UserProfile, StockFilm } from './types';
 import { Navigation } from './components/Navigation';
 import { Scanner } from './components/Scanner';
 import { BatchExifEditor } from './components/BatchExifEditor';
@@ -10,6 +10,7 @@ import { ProfileEditor } from './components/ProfileEditor';
 import { ExportSettings } from './components/ExportSettings';
 import { LightMeter } from './components/LightMeter';
 import { StatsView } from './components/StatsView';
+import { FilmFridge } from './components/FilmFridge';
 import { IdentificationResult, analyzePhoto } from './services/geminiService';
 import { resizeImage } from './utils/imageUtils';
 import { getAllRollsFromDB, saveRollToDB, deleteRollFromDB } from './services/dbService';
@@ -143,6 +144,7 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const [rolls, setRolls] = useState<Roll[]>([]);
+  const [stock, setStock] = useState<StockFilm[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_PROFILE);
 
   const [activeRollId, setActiveRollId] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export default function App() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400', camera: '' });
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // API Key State
   const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
@@ -167,6 +170,9 @@ export default function App() {
               
               const savedProfile = localStorage.getItem('film_archive_profile_v2');
               if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+
+              const savedStock = localStorage.getItem('film_fridge_stock');
+              if (savedStock) setStock(JSON.parse(savedStock));
           } catch (e) {
               console.error("Failed to load from DB", e);
           } finally {
@@ -180,6 +186,11 @@ export default function App() {
   useEffect(() => {
       localStorage.setItem('film_archive_profile_v2', JSON.stringify(userProfile));
   }, [userProfile]);
+
+  // 同步库存到 localStorage
+  useEffect(() => {
+    localStorage.setItem('film_fridge_stock', JSON.stringify(stock));
+  }, [stock]);
 
   useEffect(() => {
     if (currentView === View.SPLASH) {
@@ -351,14 +362,14 @@ export default function App() {
             </header>
 
             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-surface-dark border border-white/5 p-4 rounded-xl">
-                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold">已拍胶卷</span>
+                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/5 transition-colors group">
+                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold group-hover:text-primary transition-colors">已拍胶卷</span>
                     <div className="text-3xl font-display font-black mt-1">{rolls.length}</div>
                 </div>
-                <div className="bg-surface-dark border border-white/5 p-4 rounded-xl">
-                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold">快门次数</span>
+                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/5 p-4 rounded-xl cursor-pointer hover:bg-white/5 transition-colors group">
+                    <span className="text-[10px] text-muted uppercase tracking-widest font-bold group-hover:text-primary transition-colors">胶片冰箱</span>
                     <div className="text-3xl font-display font-black mt-1">
-                        {rolls.reduce((acc, r) => acc + r.framesTaken, 0)}
+                        {stock.reduce((acc, r) => acc + r.count, 0)}
                     </div>
                 </div>
             </div>
@@ -402,15 +413,19 @@ export default function App() {
                             <span className="material-symbols-outlined text-muted group-hover:text-primary transition-colors">chevron_right</span>
                         </div>
                     ))}
-                    {rolls.length === 0 && (
-                        <div className="text-center py-12 border-2 border-dashed border-white/5 rounded-2xl">
-                            <span className="material-symbols-outlined text-muted text-4xl mb-2">auto_fix_high</span>
-                            <p className="text-xs text-muted">还没有胶卷，快去扫描一个吧</p>
-                        </div>
-                    )}
                 </div>
             </section>
         </div>
+      )}
+
+      {/* FRIDGE VIEW */}
+      {currentView === View.FRIDGE && (
+          <FilmFridge 
+            stock={stock} 
+            onUpdateStock={setStock} 
+            onClose={() => setCurrentView(View.DASHBOARD)} 
+            onOpenKeyModal={() => setCurrentView(View.PROFILE)} 
+          />
       )}
 
       {/* LIBRARY */}
@@ -566,10 +581,6 @@ export default function App() {
                             {isKeySaved ? '已保存' : '保存'}
                           </button>
                       </div>
-                      <p className="text-[9px] text-muted flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[10px]">info</span>
-                          Key 将安全保存在本地浏览器缓存中。
-                      </p>
                   </div>
               </section>
               
@@ -581,10 +592,6 @@ export default function App() {
                   <div className="flex justify-between text-xs">
                       <span className="text-muted uppercase tracking-widest">常用胶卷</span>
                       <span className="font-mono text-white">{userProfile.favoriteFilm}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                      <span className="text-muted uppercase tracking-widest">在线作品集</span>
-                      <span className="font-mono text-primary">{userProfile.website}</span>
                   </div>
               </div>
           </div>
@@ -607,10 +614,6 @@ export default function App() {
                     <div className="space-y-4">
                         <input type="text" placeholder="品牌 (Kodak)" value={newRollData.brand} onChange={(e) => setNewRollData({...newRollData, brand: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none transition-colors" />
                         <input type="text" placeholder="型号 (Gold 200)" value={newRollData.name} onChange={(e) => setNewRollData({...newRollData, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none transition-colors" />
-                        <div className="grid grid-cols-2 gap-4">
-                            <input type="number" placeholder="ISO" value={newRollData.iso} onChange={(e) => setNewRollData({...newRollData, iso: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none" />
-                            <input type="text" placeholder="相机" value={newRollData.camera} onChange={(e) => setNewRollData({...newRollData, camera: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm focus:border-primary focus:outline-none" />
-                        </div>
                     </div>
                     <button onClick={handleManualAddRoll} className="w-full py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded-lg transition-colors active:scale-95">创建胶卷</button>
                </div>
@@ -641,7 +644,7 @@ export default function App() {
       {isExportSettingsOpen && <ExportSettings onClose={() => setIsExportSettingsOpen(false)} />}
       {selectedPhotoId && activeRoll && <Lightbox photo={activeRoll.photos.find(p => p.id === selectedPhotoId)!} onClose={() => setSelectedPhotoId(null)} onAnalyze={handleAnalyzePhoto} />}
 
-      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && (
+      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && (
           <Navigation currentView={currentView} onChangeView={setCurrentView} />
       )}
     </div>

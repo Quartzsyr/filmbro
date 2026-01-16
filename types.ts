@@ -9,7 +9,8 @@ export enum View {
   STATS = 'STATS',
   CONTACT_SHEET = 'CONTACT_SHEET',
   DEVELOP_TIMER = 'DEVELOP_TIMER',
-  LIGHT_METER = 'LIGHT_METER'
+  LIGHT_METER = 'LIGHT_METER',
+  FRIDGE = 'FRIDGE'
 }
 
 export enum RollStatus {
@@ -66,4 +67,14 @@ export interface UserProfile {
   favoriteCamera?: string;
   favoriteFilm?: string;
   website?: string;
+}
+
+export interface StockFilm {
+  id: string;
+  brand: string;
+  name: string;
+  iso: number;
+  expiryDate: string;
+  count: number;
+  format: '135' | '120' | 'Large';
 }
