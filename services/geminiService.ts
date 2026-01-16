@@ -1,9 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Gemini
-// Note: Even if API_KEY is missing, we initialize, but catch errors later.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "dummy_key" });
-
 export interface IdentificationResult {
   brand: string;
   name: string;
@@ -47,6 +43,7 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
       return fallbackData;
     }
 
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const modelId = "gemini-3-flash-preview"; 
     
     const response = await ai.models.generateContent({
@@ -91,26 +88,21 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
 };
 
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  // Convert blob URL to base64 for the API (In a real app, you'd handle this more efficiently)
-  // For this demo, we'll fetch the blob and convert.
-  let base64Data = "";
+  // 处理 Base64 或 Blob URL
+  let base64Data = photoUrl;
   
-  try {
-    const blob = await fetch(photoUrl).then(r => r.blob());
-    base64Data = await new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  } catch (e) {
-    console.error("Failed to convert image", e);
-    // Mock return if fetch fails (e.g. cross origin issues with some placeholder images)
-    return {
-       composition: "Classic rule of thirds.",
-       mood: "Nostalgic and warm.",
-       tags: ["film", "analog"],
-       rating: 8
-    };
+  // 如果是普通 URL 且不是 base64，尝试获取并转换（本地 Base64 不需要此步）
+  if (photoUrl.startsWith('http') && !photoUrl.includes('base64')) {
+      try {
+        const blob = await fetch(photoUrl).then(r => r.blob());
+        base64Data = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.error("Failed to fetch image", e);
+      }
   }
 
   const fallbackData: PhotoAnalysisResult = {
@@ -126,6 +118,7 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
       return fallbackData;
     }
 
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
@@ -133,7 +126,7 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
           {
             inlineData: {
               mimeType: "image/jpeg",
-              data: base64Data.split(',')[1]
+              data: base64Data.includes(',') ? base64Data.split(',')[1] : base64Data
             }
           },
           {
@@ -172,48 +165,28 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
 export const getDevelopmentRecipe = async (userPrompt: string): Promise<DevelopmentRecipe | null> => {
   try {
      if (!process.env.API_KEY) {
-        console.warn("No API Key, returning default recipe mock.");
         await new Promise(resolve => setTimeout(resolve, 1500));
-        return {
-            id: 'ai-mock-' + Date.now(),
-            name: 'AI: ' + userPrompt,
-            temp: '20°C',
-            steps: [
-                { name: 'Developer (Mock)', duration: 300, color: 'text-green-500', description: 'Mock AI developer step' },
-                { name: 'Stop', duration: 60, color: 'text-yellow-500', description: 'Stop bath' },
-                { name: 'Fixer', duration: 300, color: 'text-purple-500', description: 'Fixer' },
-                { name: 'Wash', duration: 600, color: 'text-blue-500', description: 'Final wash' }
-            ]
-        };
+        return null;
      }
 
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `You are an expert film development lab technician. 
       Generate a film development recipe based on this user request: "${userPrompt}".
       
-      If the user specifies a push/pull process, adjust times accordingly.
-      If the developer is not specified, recommend a standard one like D-76 or ID-11 for B&W, or C-41 for color.
-      
       Return a valid JSON object.
-      The 'color' field must be one of these Tailwind CSS classes based on the chemical step:
-      - Developer: 'text-green-500' (or red-500 for Color Dev)
-      - Stop Bath: 'text-yellow-500'
-      - Fixer / Blix: 'text-purple-500'
-      - Wash: 'text-blue-500'
-      - Stabilizer / Photo Flo: 'text-pink-500'
-      
       Schema:
       {
         "id": "unique-id",
-        "name": "Short Descriptive Name (e.g. HP5+ @ 1600 in DD-X)",
-        "temp": "Temperature (e.g. 20°C or 38°C)",
+        "name": "Short Name",
+        "temp": "20°C",
         "steps": [
           {
             "name": "Step Name",
-            "duration": 300, // in seconds
+            "duration": 300,
             "color": "tailwind-text-class",
-            "description": "Short instruction (e.g. Agitate first 30s, then 5s every min)"
+            "description": "Instruction"
           }
         ]
       }`,
@@ -234,22 +207,16 @@ export const getDevelopmentRecipe = async (userPrompt: string): Promise<Developm
                   duration: { type: Type.INTEGER },
                   color: { type: Type.STRING },
                   description: { type: Type.STRING }
-                },
-                required: ["name", "duration", "color", "description"]
+                }
               }
             }
-          },
-          required: ["id", "name", "temp", "steps"]
+          }
         }
       }
     });
     
-    const text = response.text;
-    if (!text) return null;
-    return JSON.parse(text) as DevelopmentRecipe;
-
+    return JSON.parse(response.text) as DevelopmentRecipe;
   } catch (error) {
-    console.error("Recipe generation failed:", error);
     return null;
   }
 };
