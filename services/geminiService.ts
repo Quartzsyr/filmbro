@@ -39,52 +39,42 @@ const prepareImageData = (base64Image: string) => {
 
 /**
  * 识别胶片型号
- * 
- * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
-  // Use process.env.API_KEY directly as per @google/genai guidelines.
+  // 必须使用新实例以获取最新的 API 密钥
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: {
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Image) } },
-          { text: "Identify the film brand, name, and ISO from this image. Respond ONLY with JSON." }
-        ]
-      },
-      config: {
-        systemInstruction: "You are a professional film photography expert. Return a JSON object with: brand, name, iso (integer), type (Color Negative, B&W, Slide). No markdown.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            brand: { type: Type.STRING },
-            name: { type: Type.STRING },
-            iso: { type: Type.INTEGER },
-            type: { type: Type.STRING }
-          },
-          required: ["brand", "name", "iso", "type"]
-        }
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: {
+      parts: [
+        { inlineData: { mimeType: "image/jpeg", data: prepareImageData(base64Image) } },
+        { text: "Identify this film stock. Respond ONLY with JSON format." }
+      ]
+    },
+    config: {
+      systemInstruction: "You are a professional film photography expert. Analyze the package and return: brand, name, iso (integer), type (Color Negative, B&W, Slide). No markdown.",
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          brand: { type: Type.STRING },
+          name: { type: Type.STRING },
+          iso: { type: Type.INTEGER },
+          type: { type: Type.STRING }
+        },
+        required: ["brand", "name", "iso", "type"]
       }
-    });
+    }
+  });
 
-    return JSON.parse(response.text || "{}") as IdentificationResult;
-  } catch (error: any) {
-    console.error("AI 识别失败:", error);
-    throw error;
-  }
+  return JSON.parse(response.text || "{}") as IdentificationResult;
 };
 
 /**
  * 分析照片
- * 
- * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  // Use process.env.API_KEY directly as per @google/genai guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     let base64Data = photoUrl;
@@ -107,7 +97,7 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
         ]
       },
       config: {
-        systemInstruction: "Analyze composition, mood, provide tags, and a rating (1-10). Response must be JSON.",
+        systemInstruction: "Analyze composition, mood, tags, and rating (1-10). JSON only.",
         responseMimeType: "application/json"
       }
     });
@@ -121,16 +111,13 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
 
 /**
  * 获取冲洗配方
- * 
- * Create a new GoogleGenAI instance right before use to ensure the latest API key is used.
  */
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
-  // Use process.env.API_KEY directly as per @google/genai guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Generate recipe for: ${prompt}`,
+      contents: `Generate development steps for: ${prompt}`,
       config: {
         systemInstruction: "Expert darkroom technician. Provide steps in JSON. Colors must be Tailwind classes.",
         responseMimeType: "application/json"
