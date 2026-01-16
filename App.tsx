@@ -54,7 +54,7 @@ const Lightbox = ({ photo, onClose, onAnalyze }: {
         try {
             await onAnalyze(photo.id, photo.url);
         } catch (e) {
-            alert("AI 分析暂时不可用，请检查环境变量。");
+            alert("AI 分析暂时不可用，请检查网络或环境变量。");
         } finally {
             setIsAnalyzing(false);
         }
@@ -153,10 +153,6 @@ export default function App() {
       }));
   };
 
-  /**
-   * 处理胶卷识别完成后的逻辑
-   * 创建新胶卷并保存到数据库
-   */
   const handleScanComplete = async (result: IdentificationResult, image: string) => {
     const newRoll: Roll = {
       id: Math.random().toString(36).substr(2, 9),
@@ -178,14 +174,11 @@ export default function App() {
     setCurrentView(View.ROLL_DETAIL);
   };
 
-  /**
-   * 处理手动添加照片的逻辑
-   * 包含图片压缩和状态更新
-   */
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !activeRoll) return;
-    
-    const files = Array.from(e.target.files);
+    // Fix: Explicitly cast Array.from(e.target.files) to File[] to prevent 'unknown' type errors
+    // in some TypeScript configurations where the FileList iterator might not be correctly inferred.
+    const files = Array.from(e.target.files) as File[];
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -198,9 +191,7 @@ export default function App() {
           url: resized
         });
         setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-      } catch (err) {
-        console.error("Failed to add photo:", err);
-      }
+      } catch (err) { console.error("Failed to add photo:", err); }
     }
 
     const updatedRoll: Roll = {
@@ -228,16 +219,16 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen ${userProfile.settings?.oledMode ? 'bg-black' : 'bg-background-dark'} text-white font-body pb-32 transition-all duration-500`}>
+    <div className={`min-h-screen ${userProfile.settings?.oledMode ? 'bg-black' : 'bg-background-dark'} text-white font-body pb-[calc(2rem+env(safe-area-inset-bottom)+70px)] transition-all duration-500`}>
       
       {currentView === View.DASHBOARD && (
         <div className="p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] space-y-12 animate-fade-in max-w-2xl mx-auto">
             <header className="flex justify-between items-start">
                 <div className="space-y-1">
-                    <span className="text-[11px] text-primary font-black uppercase tracking-[0.5em]">归档系统</span>
+                    <span className="text-[11px] text-primary font-black uppercase tracking-[0.5em]">数字暗房系统</span>
                     <h2 className="text-4xl font-display font-black tracking-tighter leading-none italic">{userProfile.name}</h2>
                 </div>
-                <button onClick={() => setCurrentView(View.PROFILE)} className="size-14 rounded-2xl border border-white/5 p-1 bg-surface-dark overflow-hidden">
+                <button onClick={() => setCurrentView(View.PROFILE)} className="size-14 rounded-2xl border border-white/5 p-1 bg-surface-dark overflow-hidden active:scale-95 transition-all shadow-xl">
                     <img src={userProfile.avatar} className="size-full object-cover rounded-xl" />
                 </button>
             </header>
@@ -250,12 +241,12 @@ export default function App() {
             </section>
 
             <div className="grid grid-cols-2 gap-6">
-                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/10 p-8 rounded-[2rem] text-center active:scale-95 transition-all cursor-pointer">
+                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/10 p-8 rounded-[2rem] text-center active:scale-95 transition-all cursor-pointer shadow-xl">
                     <span className="material-symbols-outlined text-primary text-4xl mb-3">grid_view</span>
                     <div className="text-[10px] text-muted font-black uppercase tracking-widest">已拍胶卷</div>
                     <div className="text-3xl font-display font-black mt-1 tabular-nums">{rolls.length}</div>
                 </div>
-                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/10 p-8 rounded-[2rem] text-center active:scale-95 transition-all cursor-pointer">
+                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/10 p-8 rounded-[2rem] text-center active:scale-95 transition-all cursor-pointer shadow-xl">
                     <span className="material-symbols-outlined text-primary text-4xl mb-3">kitchen</span>
                     <div className="text-[10px] text-muted font-black uppercase tracking-widest">片库库存</div>
                     <div className="text-3xl font-display font-black mt-1 tabular-nums">{stock.reduce((a, b) => a + b.count, 0)}</div>
@@ -263,11 +254,19 @@ export default function App() {
             </div>
 
             <section className="space-y-6">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-muted px-2">快捷功能</h3>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-muted px-2">快捷功能工具箱</h3>
                 <div className="grid grid-cols-2 gap-4">
                     <button onClick={() => setCurrentView(View.SCENE_SCOUT)} className="flex items-center gap-4 p-6 bg-primary/10 border border-primary/20 rounded-[1.5rem] active:scale-95 transition-all">
                         <span className="material-symbols-outlined text-primary">center_focus_strong</span>
                         <span className="font-black uppercase text-xs tracking-widest">场景探员</span>
+                    </button>
+                    <button onClick={() => setCurrentView(View.NEGATIVE_INVERTER)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
+                        <span className="material-symbols-outlined text-muted">filter_b_and_w</span>
+                        <span className="font-black uppercase text-xs tracking-widest">负片预览</span>
+                    </button>
+                    <button onClick={() => setCurrentView(View.RECIPROCITY_LAB)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
+                        <span className="material-symbols-outlined text-muted">hourglass_empty</span>
+                        <span className="font-black uppercase text-xs tracking-widest">倒易率计算</span>
                     </button>
                     <button onClick={() => setCurrentView(View.DEVELOP_TIMER)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
                         <span className="material-symbols-outlined text-muted">timer</span>
@@ -275,7 +274,7 @@ export default function App() {
                     </button>
                     <button onClick={() => setCurrentView(View.LIGHT_METER)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
                         <span className="material-symbols-outlined text-muted">exposure</span>
-                        <span className="font-black uppercase text-xs tracking-widest">测光表</span>
+                        <span className="font-black uppercase text-xs tracking-widest">数字测光</span>
                     </button>
                     <button onClick={() => setCurrentView(View.CHEM_CALC)} className="flex items-center gap-4 p-6 bg-white/5 border border-white/10 rounded-[1.5rem] active:scale-95 transition-all">
                         <span className="material-symbols-outlined text-muted">science</span>
@@ -289,7 +288,7 @@ export default function App() {
       {currentView === View.PROFILE && (
           <div className="p-8 pt-[calc(env(safe-area-inset-top)+3.5rem)] animate-fade-in max-w-2xl mx-auto space-y-12">
               <header className="flex justify-between items-center">
-                  <h2 className="text-4xl font-display font-black uppercase italic tracking-tighter">My Identity</h2>
+                  <h2 className="text-4xl font-display font-black uppercase italic tracking-tighter">我的档案</h2>
                   <button onClick={() => setIsProfileEditorOpen(true)} className="size-14 rounded-2xl bg-primary flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
                       <span className="material-symbols-outlined">edit</span>
                   </button>
@@ -347,13 +346,13 @@ export default function App() {
 
               <section className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-muted px-4">系统与实验室偏好</h3>
-                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden divide-y divide-white/5">
+                  <div className="bg-surface-dark border border-white/5 rounded-[2.5rem] overflow-hidden divide-y divide-white/5 shadow-xl">
                       <div className="flex items-center justify-between p-7">
                           <div>
                               <div className="text-base font-black">OLED 纯黑模式</div>
                               <div className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">极致深邃对比</div>
                           </div>
-                          <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-14 h-7 rounded-full relative transition-all ${userProfile.settings ? (userProfile.settings.oledMode ? 'bg-primary' : 'bg-white/10') : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-5 bg-white rounded-full transition-transform ${userProfile.settings ? (userProfile.settings.oledMode ? 'translate-x-7' : 'translate-x-0') : 'translate-x-0'}`}></div></button>
+                          <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-14 h-7 rounded-full relative transition-all ${userProfile.settings?.oledMode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-5 bg-white rounded-full transition-transform ${userProfile.settings?.oledMode ? 'translate-x-7' : 'translate-x-0'}`}></div></button>
                       </div>
                       <div className="flex items-center justify-between p-7">
                           <div>
@@ -434,6 +433,8 @@ export default function App() {
       )}
 
       {currentView === View.SCENE_SCOUT && <SceneScout stock={stock} onClose={() => setCurrentView(View.DASHBOARD)} />}
+      {currentView === View.NEGATIVE_INVERTER && <NegativeInverter onClose={() => setCurrentView(View.DASHBOARD)} />}
+      {currentView === View.RECIPROCITY_LAB && <ReciprocityLab onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.FRIDGE && <FilmFridge stock={stock} onUpdateStock={saveStockToDB} onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.LIGHT_METER && <LightMeter onClose={() => setCurrentView(View.DASHBOARD)} />}
       {currentView === View.DEVELOP_TIMER && <DevelopmentTimer onClose={() => setCurrentView(View.DASHBOARD)} />}
@@ -462,7 +463,7 @@ export default function App() {
           />
       )}
 
-      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && currentView !== View.SCENE_SCOUT && (<Navigation currentView={currentView} onChangeView={setCurrentView} />)}
+      {currentView !== View.SCANNER && currentView !== View.DEVELOP_TIMER && currentView !== View.LIGHT_METER && currentView !== View.FRIDGE && currentView !== View.SCENE_SCOUT && currentView !== View.NEGATIVE_INVERTER && currentView !== View.RECIPROCITY_LAB && (<Navigation currentView={currentView} onChangeView={setCurrentView} />)}
     </div>
   );
 }
