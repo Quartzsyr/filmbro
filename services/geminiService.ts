@@ -30,6 +30,13 @@ export interface DevelopmentRecipe {
 }
 
 /**
+ * 获取当前的有效 API Key
+ */
+const getApiKey = () => {
+  return localStorage.getItem('GEMINI_API_KEY') || process.env.API_KEY || "";
+};
+
+/**
  * 助手函数：清理 Base64 数据
  */
 const prepareImageData = (base64Image: string) => {
@@ -41,8 +48,10 @@ const prepareImageData = (base64Image: string) => {
  * 识别胶片型号
  */
 export const identifyFilmStock = async (base64Image: string): Promise<IdentificationResult> => {
-  // 必须使用新实例以获取最新的 API 密钥
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  
+  const ai = new GoogleGenAI({ apiKey });
   
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -75,7 +84,10 @@ export const identifyFilmStock = async (base64Image: string): Promise<Identifica
  * 分析照片
  */
 export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  
+  const ai = new GoogleGenAI({ apiKey });
   try {
     let base64Data = photoUrl;
     if (photoUrl.startsWith('http')) {
@@ -113,7 +125,10 @@ export const analyzePhoto = async (photoUrl: string): Promise<PhotoAnalysisResul
  * 获取冲洗配方
  */
 export const getDevelopmentRecipe = async (prompt: string): Promise<DevelopmentRecipe | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  
+  const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

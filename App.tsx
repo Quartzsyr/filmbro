@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, Roll, RollStatus, FilmPhoto, UserProfile } from './types';
 import { Navigation } from './components/Navigation';
@@ -153,6 +154,10 @@ export default function App() {
   const [newRollData, setNewRollData] = useState({ brand: '', name: '', iso: '400', camera: '' });
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
 
+  // API Key State
+  const [manualApiKey, setManualApiKey] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
+  const [isKeySaved, setIsKeySaved] = useState(false);
+
   // 初始化从 IndexedDB 加载
   useEffect(() => {
       const initLoad = async () => {
@@ -182,6 +187,12 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [currentView]);
+
+  const saveManualApiKey = () => {
+      localStorage.setItem('GEMINI_API_KEY', manualApiKey.trim());
+      setIsKeySaved(true);
+      setTimeout(() => setIsKeySaved(false), 2000);
+  };
 
   const handleScanComplete = async (result: IdentificationResult, captureImage: string) => {
     const newRoll: Roll = {
@@ -237,7 +248,6 @@ export default function App() {
 
   const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!e.target.files || !activeRollId) return;
-      // Fixed: Casting result of Array.from to File[] to resolve unknown type error
       const files = Array.from(e.target.files) as File[];
       setIsUploading(true);
       setUploadProgress(0);
@@ -524,8 +534,46 @@ export default function App() {
                   </div>
                   <p className="text-sm text-muted leading-relaxed max-w-sm">{userProfile.bio}</p>
               </div>
+
+              {/* API Configuration Section */}
+              <section className="bg-surface-dark border border-white/5 p-6 rounded-2xl space-y-4">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">vpn_key</span>
+                      AI 引擎配置
+                  </h3>
+                  <div className="space-y-3">
+                      <p className="text-[11px] text-muted leading-relaxed italic">
+                          手动配置 Gemini API Key 以启用胶卷扫描和照片分析功能。
+                      </p>
+                      <div className="flex gap-2">
+                          <input 
+                              type="password"
+                              value={manualApiKey}
+                              onChange={(e) => {
+                                  setManualApiKey(e.target.value);
+                                  setIsKeySaved(false);
+                              }}
+                              placeholder="粘贴您的 API Key"
+                              className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-xs font-mono focus:border-primary focus:outline-none transition-colors"
+                          />
+                          <button 
+                            onClick={saveManualApiKey}
+                            className={`px-4 py-2 rounded-lg font-bold text-[10px] uppercase transition-all flex items-center gap-2 ${
+                                isKeySaved ? 'bg-green-600 text-white' : 'bg-primary text-white hover:bg-primary-hover active:scale-95'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-sm">{isKeySaved ? 'check' : 'save'}</span>
+                            {isKeySaved ? '已保存' : '保存'}
+                          </button>
+                      </div>
+                      <p className="text-[9px] text-muted flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">info</span>
+                          Key 将安全保存在本地浏览器缓存中。
+                      </p>
+                  </div>
+              </section>
               
-              <div className="space-y-4 pt-8 border-t border-white/5">
+              <div className="space-y-4 pt-4 border-t border-white/5">
                   <div className="flex justify-between text-xs">
                       <span className="text-muted uppercase tracking-widest">常用机型</span>
                       <span className="font-mono text-white">{userProfile.favoriteCamera}</span>
