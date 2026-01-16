@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: UserSettings = {
 const INITIAL_PROFILE: UserProfile = {
     name: '胶片收藏家',
     role: '自 2021 年开始记录',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200',
+    avatar: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=200',
     bio: '捕捉银盐间的瞬间。专注于街头摄影和建筑抽象。',
     favoriteCamera: 'Leica M6',
     favoriteFilm: 'Kodak Tri-X 400',
@@ -85,7 +85,7 @@ const Lightbox = ({ photo, onClose, onAnalyze, onGoToProfile }: {
             </div>
 
             <div className={`fixed inset-x-0 bottom-0 md:static md:w-96 bg-[#111] border-t md:border-t-0 md:border-l border-white/10 transform transition-transform duration-300 ease-out z-30 flex flex-col pb-[env(safe-area-inset-bottom)] ${isPanelOpen ? 'translate-y-0' : 'translate-y-full md:translate-x-full md:translate-y-0'}`}>
-                <div className="p-6 h-full overflow-y-auto space-y-6">
+                <div className="p-6 h-full overflow-y-auto space-y-6 no-scrollbar">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary">analytics</span>
                         验片报告
@@ -136,7 +136,6 @@ export default function App() {
               const savedStock = await getAllStockFromDB();
               setStock(savedStock);
               
-              // 获取每日见解
               const insight = await getDailyInsight();
               setDailyInsight(insight);
           } catch (e) { console.error(e); } finally { setIsLoading(false); }
@@ -155,11 +154,12 @@ export default function App() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 6) return "凌晨，暗房还在亮着吗？";
-    if (hour < 11) return "早安，冲印人";
-    if (hour < 14) return "午安，光影在跃动";
+    if (hour < 5) return "凌晨，暗房还在亮着吗？";
+    if (hour < 9) return "早安，晨光摄影人";
+    if (hour < 12) return "上午好，光线正迷人";
     if (hour < 18) return "下午好，记录瞬间";
-    return "晚安，潜入银盐之梦";
+    if (hour < 22) return "晚安，潜入银盐之梦";
+    return "深夜，灵魂在胶片中游走";
   };
 
   const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
@@ -171,7 +171,6 @@ export default function App() {
 
   const handleClearAllData = async () => {
       if (confirm("警告：此操作将永久删除本地存储的所有胶卷、照片和库存数据。确定继续吗？")) {
-          // 清理逻辑 (简单处理演示)
           indexedDB.deleteDatabase('FilmArchiveDB');
           localStorage.removeItem('film_archive_profile_v2');
           window.location.reload();
@@ -263,8 +262,8 @@ export default function App() {
                 <button onClick={() => setCurrentView(View.PROFILE)} className="size-14 rounded-2xl border border-white/10 p-0.5 overflow-hidden active:scale-95 transition-transform"><img src={userProfile.avatar} className="w-full h-full object-cover rounded-xl" /></button>
             </header>
 
-            <section className="bg-surface-dark border border-white/5 p-6 rounded-3xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <section className="bg-surface-dark border border-white/5 p-6 rounded-3xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transition-transform group-hover:scale-125 duration-1000">
                     <span className="material-symbols-outlined text-7xl">format_quote</span>
                 </div>
                 <h3 className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Daily Insight</h3>
@@ -274,12 +273,12 @@ export default function App() {
             </section>
 
             <div className="grid grid-cols-2 gap-4">
-                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/5 p-6 rounded-3xl cursor-pointer hover:bg-white/5 transition-colors">
+                <div onClick={() => setCurrentView(View.LIBRARY)} className="bg-surface-dark border border-white/5 p-6 rounded-3xl cursor-pointer hover:bg-white/10 active:scale-95 transition-all">
                     <span className="material-symbols-outlined text-primary mb-3">grid_view</span>
                     <div className="text-[10px] text-muted font-bold uppercase tracking-widest">已拍胶卷</div>
                     <div className="text-3xl font-display font-black mt-1">{rolls.length}</div>
                 </div>
-                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/5 p-6 rounded-3xl cursor-pointer hover:bg-white/5 transition-colors">
+                <div onClick={() => setCurrentView(View.FRIDGE)} className="bg-surface-dark border border-white/5 p-6 rounded-3xl cursor-pointer hover:bg-white/10 active:scale-95 transition-all">
                     <span className="material-symbols-outlined text-primary mb-3">kitchen</span>
                     <div className="text-[10px] text-muted font-bold uppercase tracking-widest">胶片冰箱</div>
                     <div className="text-3xl font-display font-black mt-1">{stock.reduce((a, b) => a + b.count, 0)}</div>
@@ -289,10 +288,10 @@ export default function App() {
             <section className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-muted">暗房工具集</h3>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setCurrentView(View.DEVELOP_TIMER)} className="flex items-center gap-4 p-5 bg-primary/10 border border-primary/20 rounded-2xl active:scale-95 transition-transform"><span className="material-symbols-outlined text-primary">timer</span>暗房计时</button>
-                    <button onClick={() => setCurrentView(View.LIGHT_METER)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-transform"><span className="material-symbols-outlined text-muted">exposure</span>测光表</button>
-                    <button onClick={() => setCurrentView(View.NEGATIVE_INVERTER)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-transform"><span className="material-symbols-outlined text-muted">filter_b_and_w</span>底片翻转</button>
-                    <button onClick={() => setCurrentView(View.CHEM_CALC)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-transform"><span className="material-symbols-outlined text-muted">calculate</span>药液计算</button>
+                    <button onClick={() => setCurrentView(View.DEVELOP_TIMER)} className="flex items-center gap-4 p-5 bg-primary/10 border border-primary/20 rounded-2xl active:scale-95 transition-all"><span className="material-symbols-outlined text-primary">timer</span>暗房计时</button>
+                    <button onClick={() => setCurrentView(View.LIGHT_METER)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-all"><span className="material-symbols-outlined text-muted">exposure</span>测光表</button>
+                    <button onClick={() => setCurrentView(View.NEGATIVE_INVERTER)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-all"><span className="material-symbols-outlined text-muted">filter_b_and_w</span>底片翻转</button>
+                    <button onClick={() => setCurrentView(View.CHEM_CALC)} className="flex items-center gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl active:scale-95 transition-all"><span className="material-symbols-outlined text-muted">calculate</span>药液计算</button>
                 </div>
             </section>
         </div>
@@ -313,7 +312,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* AI Key Config */}
               <section className="bg-surface-dark border border-white/5 p-6 rounded-3xl space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2"><span className="material-symbols-outlined text-sm">vpn_key</span>AI 引擎配置</h3>
                   <div className="space-y-4">
@@ -322,20 +320,19 @@ export default function App() {
                   </div>
               </section>
 
-              {/* System Settings */}
               <section className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted px-2">系统设置</h3>
                   <div className="bg-surface-dark border border-white/5 rounded-3xl overflow-hidden divide-y divide-white/5">
                       <div className="flex items-center justify-between p-5">
-                          <div><div className="text-sm font-bold">OLED 纯黑模式</div><div className="text-[10px] text-muted uppercase">降低功耗，纯粹视觉</div></div>
+                          <div><div className="text-sm font-bold">OLED 纯黑模式</div><div className="text-[10px] text-muted uppercase">适合 OLED 屏，极致深邃</div></div>
                           <button onClick={() => handleUpdateSettings({ oledMode: !userProfile.settings?.oledMode })} className={`w-12 h-6 rounded-full relative transition-colors ${userProfile.settings?.oledMode ? 'bg-primary' : 'bg-white/10'}`}><div className={`absolute top-1 left-1 size-4 bg-white rounded-full transition-transform ${userProfile.settings?.oledMode ? 'translate-x-6' : 'translate-x-0'}`}></div></button>
                       </div>
                       <div className="flex items-center justify-between p-5">
-                          <div><div className="text-sm font-bold">温度单位</div><div className="text-[10px] text-muted uppercase">影响暗房计时器的温度显示</div></div>
+                          <div><div className="text-sm font-bold">温度单位</div><div className="text-[10px] text-muted uppercase">影响暗房工具显示</div></div>
                           <button onClick={() => handleUpdateSettings({ tempUnit: userProfile.settings?.tempUnit === 'C' ? 'F' : 'C' })} className="px-4 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-black uppercase tracking-widest">{userProfile.settings?.tempUnit === 'C' ? 'Celsius' : 'Fahrenheit'}</button>
                       </div>
                       <div className="flex items-center justify-between p-5">
-                          <div><div className="text-sm font-bold">数据备份</div><div className="text-[10px] text-muted uppercase">导出本地数据库为 JSON 文件</div></div>
+                          <div><div className="text-sm font-bold">本地数据导出</div><div className="text-[10px] text-muted uppercase">备份为 JSON 文件</div></div>
                           <button onClick={handleExportData} className="size-10 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center active:scale-90 transition-transform"><span className="material-symbols-outlined text-sm">download</span></button>
                       </div>
                   </div>
@@ -343,7 +340,7 @@ export default function App() {
 
               <section className="pt-4 px-2 flex flex-col items-center">
                   <button onClick={handleClearAllData} className="text-[10px] font-black text-red-500/60 uppercase tracking-widest hover:text-red-500 transition-colors">彻底清空本地数据</button>
-                  <div className="text-[9px] text-muted/30 uppercase tracking-[0.4em] mt-8">Film Archive AI v2.4.0 • Gemini 3 Vision</div>
+                  <div className="text-[9px] text-muted/30 uppercase tracking-[0.4em] mt-8">Film Archive AI v2.5.0 • Gemini 3 Flash</div>
               </section>
           </div>
       )}
@@ -355,6 +352,7 @@ export default function App() {
                 {rolls.map(roll => (
                     <div key={roll.id} onClick={() => { setActiveRollId(roll.id); setCurrentView(View.ROLL_DETAIL); }} className="relative aspect-[4/5] rounded-xl overflow-hidden border border-white/10 group cursor-pointer"><img src={roll.coverImage} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-100 transition-opacity"></div><div className="absolute bottom-4 left-4 right-4"><div className="text-[8px] font-mono text-primary font-bold uppercase">{roll.brand}</div><div className="text-sm font-display font-black uppercase mt-0.5">{roll.name}</div></div></div>
                 ))}
+                {rolls.length === 0 && <div className="col-span-full py-20 text-center text-muted uppercase text-xs tracking-widest border-2 border-dashed border-white/5 rounded-3xl">暂无胶卷，开始拍摄吧</div>}
              </div>
           </div>
       )}
@@ -364,7 +362,7 @@ export default function App() {
               <div className="relative h-[45vh] w-full overflow-hidden">
                   <img src={activeRoll.coverImage} className="absolute inset-0 w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-background-dark via-background-dark/20 to-transparent"></div>
-                  <button onClick={() => setCurrentView(View.LIBRARY)} className="absolute top-[calc(env(safe-area-inset-top)+1rem)] left-6 size-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10"><span className="material-symbols-outlined">arrow_back</span></button>
+                  <button onClick={() => setCurrentView(View.LIBRARY)} className="absolute top-[calc(env(safe-area-inset-top)+1rem)] left-6 z-30 size-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10"><span className="material-symbols-outlined">arrow_back</span></button>
                   <div className="absolute bottom-8 left-6 right-6"><span className="text-xs text-primary font-bold uppercase">{activeRoll.brand}</span><h2 className="text-5xl font-display font-black uppercase mt-1 leading-none">{activeRoll.name}</h2></div>
               </div>
               <div className="p-6 space-y-8">
